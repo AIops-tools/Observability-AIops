@@ -130,6 +130,7 @@ monitoring suites (Datadog, New Relic, enterprise NMS) are out of scope.
 2. `update_dashboard <model>` — it fetches + stashes the prior model and records a
    restore undo, or `delete_dashboard <uid> --dry-run` → preview
 3. Re-run without `--dry-run` (set `OBSERVABILITY_AUDIT_APPROVED_BY` +
+- **Secure by default (v0.2.0+)**: with no `~/.observability-aiops/rules.yaml`, high/critical operations are denied unless `OBSERVABILITY_AUDIT_APPROVED_BY` names an approver (set `OBSERVABILITY_AUDIT_RATIONALE` too). `observability-aiops init` seeds a starter rules.yaml; an operator-authored rules file is honoured as-is.
    `OBSERVABILITY_AUDIT_RATIONALE` for the high-risk delete) — the prior model is
    captured before delete so the recorded undo can recreate it
 
