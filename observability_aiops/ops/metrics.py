@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from observability_aiops.ops._util import num, prom_data, rows, s
+from observability_aiops.ops._util import _seg, num, prom_data, rows, s
 
 _MAX_SERIES = 500
 _MAX_POINTS = 500
@@ -93,7 +93,7 @@ def label_values(conn: Any, label: str = "__name__", match: str | None = None) -
     """
     try:
         params = {"match[]": match} if match else None
-        data = prom_data(conn.prom_get(f"/api/v1/label/{s(label, 64)}/values", params))
+        data = prom_data(conn.prom_get(f"/api/v1/label/{_seg(s(label, 64))}/values", params))
         values = [s(v, 128) for v in (data or []) if isinstance(v, str)]
     except Exception as exc:  # noqa: BLE001 — report as partial
         return {"error": s(exc, 200), "label": s(label, 64)}

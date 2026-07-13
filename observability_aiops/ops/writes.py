@@ -18,7 +18,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from observability_aiops.ops import grafana, prom_status
-from observability_aiops.ops._util import s
+from observability_aiops.ops._util import _seg, s
 
 
 def _now() -> datetime:
@@ -91,7 +91,7 @@ def create_silence(
 
 def expire_silence(conn: Any, silence_id: str) -> dict:
     """[WRITE][med] Expire (delete) an Alertmanager silence by id."""
-    conn.am_delete(f"/api/v2/silence/{s(silence_id, 64)}")
+    conn.am_delete(f"/api/v2/silence/{_seg(s(silence_id, 64))}")
     return {"action": "expire_silence", "silenceId": s(silence_id, 64)}
 
 
@@ -147,7 +147,7 @@ def delete_dashboard(conn: Any, uid: str) -> dict:
     title = ""
     if isinstance(prior_dash, dict):
         title = str(prior_dash.get("title") or "")
-    conn.graf_delete(f"/api/dashboards/uid/{s(uid, 64)}")
+    conn.graf_delete(f"/api/dashboards/uid/{_seg(s(uid, 64))}")
     return {
         "action": "delete_dashboard",
         "uid": s(uid, 64),

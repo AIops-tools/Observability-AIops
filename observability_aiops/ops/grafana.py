@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from observability_aiops.ops._util import as_obj, s
+from observability_aiops.ops._util import _seg, as_obj, s
 
 _MAX_ROWS = 500
 
@@ -37,7 +37,7 @@ def list_dashboards(conn: Any, query: str | None = None) -> dict:
 
 def fetch_dashboard_model(conn: Any, uid: str) -> dict:
     """Fetch a dashboard's raw ``{dashboard, meta}`` model (may raise)."""
-    return as_obj(conn.graf_get(f"/api/dashboards/uid/{s(uid, 64)}"))
+    return as_obj(conn.graf_get(f"/api/dashboards/uid/{_seg(s(uid, 64))}"))
 
 
 def get_dashboard(conn: Any, uid: str) -> dict:

@@ -4,14 +4,25 @@ The Prometheus HTTP API wraps results in ``{"status":"success","data":{...}}``;
 Grafana returns bare objects/arrays; Alertmanager returns bare arrays. ``prom_data``
 unwraps the Prometheus envelope, ``rows`` / ``as_obj`` normalise list/dict access,
 and ``s`` funnels every server-provided string through ``sanitize()``
-(prompt-injection defense) before it reaches the caller.
+(bounded length, output hygiene) before it reaches the caller.
 """
 
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import quote
 
 from observability_aiops.governance import sanitize
+
+
+def _seg(value: Any) -> str:
+    """URL-encode one REST path segment.
+
+    Agent-supplied identifiers (silence ids, dashboard UIDs, label names) are
+    interpolated into URL paths; encoding with ``safe=""`` ensures ``/``, ``..``
+    sequences, ``?`` etc. cannot rewrite the request path.
+    """
+    return quote(str(value), safe="")
 
 
 def prom_data(payload: Any) -> Any:

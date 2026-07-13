@@ -158,3 +158,22 @@ def test_governed_update_dashboard_records_undo(monkeypatch, tmp_path):
     # The governed harness attached an undo id → an inverse was recorded.
     assert result["_undo_id"], "expected the harness to record an undo token"
     assert result["priorState"]["dashboard"]["title"] == "Old"
+
+
+# ── URL-encoding of agent-supplied path segments ─────────────────────────────
+
+
+@pytest.mark.unit
+def test_path_traversal_ids_are_url_encoded():
+    """An id carrying ``../`` must not reach the HTTP client as a raw path
+    traversal — the segment is URL-encoded before interpolation."""
+    conn = MagicMock(name="conn")
+    conn.target.platform = "prometheus"
+    ops.expire_silence(conn, "../v1/admin")
+    path = conn.am_delete.call_args.args[0]
+    assert "../" not in path and path.startswith("/api/v2/silence/")
+
+    graf = _graf_conn({"uid": "x", "title": "t"})
+    ops.delete_dashboard(graf, "../../api/admin")
+    path = graf.graf_delete.call_args.args[0]
+    assert "../" not in path and path.startswith("/api/dashboards/uid/")
