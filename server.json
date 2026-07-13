@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.AIops-tools/observability-aiops",
+  "title": "Observability AIops",
+  "description": "Governed Prometheus + Grafana ops: PromQL, alerts, dashboards, RCA; 30 tools.",
+  "repository": {
+    "url": "https://github.com/AIops-tools/Observability-AIops",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "observability-aiops",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

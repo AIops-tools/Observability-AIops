@@ -1,0 +1,135 @@
+"""``observability-aiops init`` — a friendly, interactive onboarding wizard.
+
+Walks a new user through connecting their first observability target: collects
+the non-secret connection details into ``config.yaml`` and the bearer token into
+the *encrypted* store (never plaintext on disk). Designed to be run on a
+terminal; everything it needs is prompted with sensible defaults.
+"""
+
+from __future__ import annotations
+
+import getpass
+
+import typer
+import yaml
+
+from observability_aiops.cli._common import cli_errors, console
+from observability_aiops.config import (
+    CONFIG_DIR,
+    CONFIG_FILE,
+    DEFAULT_PORTS,
+    PLATFORM_GRAFANA,
+    PLATFORM_PROMETHEUS,
+)
+from observability_aiops.secretstore import SecretStore, resolve_master_password
+
+
+def _load_existing_targets() -> list[dict]:
+    if not CONFIG_FILE.exists():
+        return []
+    raw = yaml.safe_load(CONFIG_FILE.read_text("utf-8")) or {}
+    return list(raw.get("targets", []))
+
+
+def _write_targets(targets: list[dict]) -> None:
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        CONFIG_DIR.chmod(0o700)
+    except OSError:
+        pass
+    CONFIG_FILE.write_text(yaml.safe_dump({"targets": targets}, sort_keys=False), "utf-8")
+
+
+@cli_errors
+def init_cmd() -> None:
+    """Interactively set up your first Prometheus or Grafana connection."""
+    console.print("[bold cyan]Observability AIops — setup wizard[/]")
+    console.print(
+        "This collects Prometheus or Grafana connection details (saved to "
+        "config.yaml) and the bearer token — optional for a self-hosted "
+        "Prometheus, required for Grafana — (saved [bold]encrypted[/] to "
+        "secrets.enc).\n"
+    )
+
+    console.print("[bold]Step 1 — master password[/]")
+    console.print(
+        "[dim]Encrypts secrets.enc. You'll set it via the "
+        "OBSERVABILITY_AIOPS_MASTER_PASSWORD env var for non-interactive/MCP use.[/]"
+    )
+    password = resolve_master_password(confirm_if_new=True)
+    store = SecretStore.unlock(password)
+
+    targets = _load_existing_targets()
+    existing_names = {t.get("name") for t in targets}
+
+    while True:
+        console.print("\n[bold]Step 2 — add a target[/]")
+        name = typer.prompt("Target name (e.g. prod-prom)").strip()
+        if name in existing_names:
+            if not typer.confirm(f"'{name}' already exists — overwrite?", default=False):
+                continue
+            targets = [t for t in targets if t.get("name") != name]
+
+        platform = typer.prompt(
+            f"Platform ({PLATFORM_PROMETHEUS} / {PLATFORM_GRAFANA})",
+            default=PLATFORM_PROMETHEUS,
+        ).strip().lower()
+        if platform not in (PLATFORM_PROMETHEUS, PLATFORM_GRAFANA):
+            console.print("[red]Platform must be 'prometheus' or 'grafana'.[/]")
+            continue
+
+        host = typer.prompt("Host (IP or FQDN)").strip()
+        scheme = typer.prompt("Scheme (http / https)", default="http").strip().lower()
+        port = typer.prompt("Port", default=DEFAULT_PORTS[platform], type=int)
+        verify_ssl = True
+        if scheme == "https":
+            verify_ssl = typer.confirm(
+                "Verify TLS certificate? (No for self-signed lab certs)", default=True
+            )
+
+        entry = {
+            "name": name,
+            "platform": platform,
+            "host": host,
+            "scheme": scheme,
+            "port": port,
+            "verify_ssl": verify_ssl,
+        }
+        if platform == PLATFORM_PROMETHEUS:
+            am_url = typer.prompt(
+                "Alertmanager URL (optional; blank assumes host:9093)", default=""
+            ).strip()
+            if am_url:
+                entry["alertmanager_url"] = am_url
+
+        required = platform == PLATFORM_GRAFANA
+        prompt = "Grafana API/service-account token" if required else (
+            "Prometheus bearer token (optional — blank if unauthenticated)"
+        )
+        token = getpass.getpass(f"{prompt} for '{name}' (hidden): ")
+        if token:
+            store = store.set(name, token)
+        elif required:
+            console.print("[red]Grafana requires a token. Aborting this target.[/]")
+            continue
+
+        targets.append(entry)
+        existing_names.add(name)
+        _write_targets(targets)
+        console.print(
+            f"[green]✓ Saved target '{name}' ({platform}"
+            f"{', token encrypted' if token else ', no token'}).[/]"
+        )
+
+        if not typer.confirm("\nAdd another target?", default=False):
+            break
+
+    console.print(f"\n[green]✓ Setup complete.[/] Config: {CONFIG_FILE}")
+    console.print(
+        "[dim]Tip: export OBSERVABILITY_AIOPS_MASTER_PASSWORD=... in your shell profile "
+        "so the MCP server and CLI can unlock secrets non-interactively.[/]"
+    )
+    if typer.confirm("Run a connectivity check now (observability-aiops doctor)?", default=True):
+        from observability_aiops.doctor import run_doctor
+
+        raise typer.Exit(run_doctor())
