@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.1
+
+- Fix: `OBSERVABILITY_AIOPS_HOME` now also relocates `config.yaml` (was hardcoded to `~/.observability-aiops`).
+- Fix: **CLI writes are now audited + undo-recorded** via the governance path — previously only the MCP tools recorded audit/undo; CLI `manage`/`remediate`/etc. writes now go through the same `@governed_tool` layer (they keep their dry-run + double-confirm). CLI write output is now the governed JSON result. No API/tool changes.
+
+
 All notable changes to observability-aiops are documented here. This project adheres
 to [Semantic Versioning](https://semver.org/).
 
