@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "observability-aiops"
-version = "0.2.0"
+version = "0.2.1"
 description = "Governed AI-ops for self-hosted Prometheus + Grafana: PromQL, scrape-target & rule health, alerts/silences, dashboards, and flagship RCA/scrape-health/alert-noise analyses with a built-in governance harness (audit, budget, undo, risk tiers)"
 readme = "README.md"
 license = "MIT"

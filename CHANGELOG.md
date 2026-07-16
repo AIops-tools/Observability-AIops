@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.2.1 — 2026-07-16
+
+### Fixed
+- **`secrets.enc` now follows `OBSERVABILITY_AIOPS_HOME`** (secretstore hardcoded the real
+  home directory; config/audit/undo already relocated — found in live verification).
+- **Audit fidelity**: failures sanitized into `{"error": ...}` results by the MCP error
+  layer are now audited as `status=error` (they previously read as `ok`, hiding failed
+  attempts from exception reports), and no undo is recorded for a call that failed.
+- Undo replay fix: `update_dashboard` treats a 404 on the prior-fetch as create-mode, so `delete_dashboard`'s captured-model undo actually recreates the dashboard.
+
+### Tests
+- `doctor` and the `init` wizard are now fully covered (previously ~10–20%); plus a
+  regression test for the sanitized-failure audit status.
+
 ## v0.2.0 — 2026-07-13
 
 Security-hardening release from a line-wide code review.

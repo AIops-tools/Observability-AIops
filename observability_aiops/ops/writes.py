@@ -5,7 +5,8 @@ can record a faithful undo:
 
   * ``create_silence`` returns the new silence id (undo = expire it).
   * ``update_dashboard`` / ``delete_dashboard`` GET the dashboard first and stash
-    the prior model in ``priorState`` (undo = restore/recreate it).
+    the prior model in ``priorState`` (undo = restore/recreate it). A 404 on the
+    update prior-fetch is tolerated (create mode) so a recorded delete undo replays.
   * ``reload_prometheus_config`` records the pre-reload config hash (no undo).
 
 The footgun write — ``delete_dashboard`` — is risk=high at the MCP layer with a
@@ -17,8 +18,11 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from observability_aiops.connection import ObservabilityApiError
 from observability_aiops.ops import grafana, prom_status
 from observability_aiops.ops._util import _seg, s
+
+_NOT_FOUND_STATUS = 404
 
 
 def _now() -> datetime:
@@ -111,12 +115,31 @@ def create_annotation(
     }
 
 
+def _fetch_prior_dashboard(conn: Any, uid: str) -> dict | None:
+    """Fetch the current dashboard model for undo capture; ``None`` if it doesn't exist.
+
+    A missing uid (404) is a legitimate update_dashboard input: it happens when
+    replaying a delete_dashboard undo, where the recorded descriptor re-creates
+    the just-deleted dashboard via update_dashboard. In that case there is no
+    prior state to capture and the write proceeds in create mode. Any other API
+    error (auth, server, transport) still raises.
+    """
+    try:
+        return grafana.fetch_dashboard_model(conn, uid)
+    except ObservabilityApiError as exc:
+        if exc.status_code == _NOT_FOUND_STATUS:
+            return None
+        raise
+
+
 def update_dashboard(conn: Any, dashboard: dict, overwrite: bool = True) -> dict:
-    """[WRITE][med] Update a Grafana dashboard. Captures the prior model for undo.
+    """[WRITE][med] Update (or re-create) a Grafana dashboard. Captures prior model for undo.
 
     ``dashboard`` is a full dashboard model and MUST carry its ``uid``. The
     current model is fetched first and stashed in ``priorState`` so the harness
-    records a restore undo.
+    records a restore undo. If the uid does not exist (404) the write proceeds
+    as a create with ``priorState.dashboard = None`` — this is how a recorded
+    delete_dashboard undo replays.
     """
     uid = str((dashboard or {}).get("uid") or "").strip()
     if not uid:
@@ -124,7 +147,7 @@ def update_dashboard(conn: Any, dashboard: dict, overwrite: bool = True) -> dict
             "update_dashboard requires the dashboard model to include its 'uid' "
             "(fetch it with get_dashboard first)."
         )
-    prior = grafana.fetch_dashboard_model(conn, uid)
+    prior = _fetch_prior_dashboard(conn, uid)
     prior_dash = prior.get("dashboard") if isinstance(prior, dict) else None
     conn.graf_post("/api/dashboards/db", json={"dashboard": dashboard, "overwrite": overwrite})
     return {
