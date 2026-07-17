@@ -8,20 +8,24 @@ from observability_aiops.cli._common import cli_errors
 from observability_aiops.cli.alert import alert_app
 from observability_aiops.cli.doctor import doctor_cmd
 from observability_aiops.cli.init import init_cmd
+from observability_aiops.cli.logs import logs_app
 from observability_aiops.cli.overview import overview_cmd
 from observability_aiops.cli.query import query_app
 from observability_aiops.cli.secret import secret_app
+from observability_aiops.cli.undo import undo_app
 
 app = typer.Typer(
     name="observability-aiops",
-    help="Governed AI-ops for self-hosted Prometheus + Grafana: PromQL, "
-    "scrape-target & rule health, alerts/silences, dashboards, and RCA.",
+    help="Governed AI-ops for self-hosted Prometheus + Grafana + Loki: PromQL, "
+    "scrape-target & rule health, alerts/silences, dashboards, LogQL, and RCA.",
     no_args_is_help=True,
 )
 
 app.add_typer(query_app, name="query")
+app.add_typer(logs_app, name="logs")
 app.add_typer(alert_app, name="alert")
 app.add_typer(secret_app, name="secret")
+app.add_typer(undo_app, name="undo")
 app.command("init")(init_cmd)
 app.command("overview")(overview_cmd)
 app.command("doctor")(doctor_cmd)

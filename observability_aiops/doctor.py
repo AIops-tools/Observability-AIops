@@ -7,6 +7,8 @@ from rich.console import Console
 from observability_aiops.config import (
     CONFIG_FILE,
     ENV_FILE,
+    PLATFORM_GRAFANA,
+    PLATFORM_LOKI,
     PLATFORM_PROMETHEUS,
     TOKEN_REQUIRED,
     load_config,
@@ -89,9 +91,15 @@ def run_doctor(skip_auth: bool = False) -> int:
             if target.platform == PLATFORM_PROMETHEUS:
                 conn.prom_get("/api/v1/status/buildinfo")
                 detail = "Prometheus HTTP API OK"
-            else:
+            elif target.platform == PLATFORM_LOKI:
+                conn.loki_get("/ready")
+                conn.loki_get("/loki/api/v1/status/buildinfo")
+                detail = "Loki HTTP API OK"
+            elif target.platform == PLATFORM_GRAFANA:
                 conn.graf_get("/api/health")
                 detail = "Grafana HTTP API OK"
+            else:  # pragma: no cover — config validation prevents this
+                detail = "OK"
             _console.print(
                 f"[green]✓ Connected to '{target.name}' ({target.platform} "
                 f"{target.host}) — {detail}[/]"

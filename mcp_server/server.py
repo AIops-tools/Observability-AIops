@@ -22,11 +22,13 @@ from mcp_server.tools import (  # noqa: F401 — side effects
     alerts,
     analysis,
     grafana,
+    loki,
     metrics,
     overview,
     prometheus,
     rules,
     targets,
+    undo,
     writes,
 )
 

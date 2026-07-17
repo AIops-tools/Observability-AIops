@@ -76,17 +76,21 @@ mcp = FastMCP(
     "observability-aiops",
     instructions=(
         "Self-hosted observability operations (preview) over Prometheus, "
-        "Alertmanager, and Grafana: PromQL instant/range queries, label + series "
-        "metadata; scrape-target health and dropped targets; recording/alerting "
-        "rules and their health; firing/pending alerts, Alertmanager alerts + "
-        "silences; Grafana dashboards, datasources, folders, and health; three "
+        "Alertmanager, Grafana, and Grafana Loki: PromQL instant/range queries, "
+        "label + series metadata; scrape-target health and dropped targets; "
+        "recording/alerting rules and their health; firing/pending alerts, "
+        "Alertmanager alerts + silences; Grafana dashboards, datasources, folders, "
+        "and health; bounded Loki LogQL reads (labels, label values, query, "
+        "error-tail) with two flagship log analyses (log-error-burst RCA, "
+        "log-volume/cardinality) and an alert->log cross-signal; three metric "
         "flagship analyses (firing-alert RCA, target-scrape-health, "
         "alert-noise/flap); and governed writes — create/expire silence, create "
-        "annotation, update/delete dashboard, reload Prometheus config. Destructive "
-        "writes (delete dashboard) are risk=high with a dry_run preview and require "
-        "an approver. Reversible writes capture the real before-state and record an "
-        "undo. Every tool runs through the observability-aiops governance harness "
-        "(audit / budget / risk-tier / undo)."
+        "annotation, update/delete dashboard, reload Prometheus config. Loki is "
+        "read-only (no safe write surface). Destructive writes (delete dashboard) "
+        "are risk=high with a dry_run preview and require an approver. Reversible "
+        "writes capture the real before-state and record an undo. Every tool runs "
+        "through the observability-aiops governance harness (audit / budget / "
+        "risk-tier / undo)."
     ),
 )
 

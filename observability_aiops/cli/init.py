@@ -15,10 +15,13 @@ import yaml
 
 from observability_aiops.cli._common import cli_errors, console
 from observability_aiops.config import (
+    AUTH_BASIC,
+    AUTH_BEARER,
     CONFIG_DIR,
     CONFIG_FILE,
     DEFAULT_PORTS,
     PLATFORM_GRAFANA,
+    PLATFORM_LOKI,
     PLATFORM_PROMETHEUS,
 )
 from observability_aiops.governance.paths import ops_path
@@ -80,13 +83,12 @@ def _write_targets(targets: list[dict]) -> None:
 
 @cli_errors
 def init_cmd() -> None:
-    """Interactively set up your first Prometheus or Grafana connection."""
+    """Interactively set up your first Prometheus, Grafana, or Loki connection."""
     console.print("[bold cyan]Observability AIops — setup wizard[/]")
     console.print(
-        "This collects Prometheus or Grafana connection details (saved to "
-        "config.yaml) and the bearer token — optional for a self-hosted "
-        "Prometheus, required for Grafana — (saved [bold]encrypted[/] to "
-        "secrets.enc).\n"
+        "This collects Prometheus, Grafana, or Loki connection details (saved to "
+        "config.yaml) and the token — optional for a self-hosted Prometheus/Loki, "
+        "required for Grafana — (saved [bold]encrypted[/] to secrets.enc).\n"
     )
 
     console.print("[bold]Step 1 — master password[/]")
@@ -109,11 +111,11 @@ def init_cmd() -> None:
             targets = [t for t in targets if t.get("name") != name]
 
         platform = typer.prompt(
-            f"Platform ({PLATFORM_PROMETHEUS} / {PLATFORM_GRAFANA})",
+            f"Platform ({PLATFORM_PROMETHEUS} / {PLATFORM_GRAFANA} / {PLATFORM_LOKI})",
             default=PLATFORM_PROMETHEUS,
         ).strip().lower()
-        if platform not in (PLATFORM_PROMETHEUS, PLATFORM_GRAFANA):
-            console.print("[red]Platform must be 'prometheus' or 'grafana'.[/]")
+        if platform not in (PLATFORM_PROMETHEUS, PLATFORM_GRAFANA, PLATFORM_LOKI):
+            console.print("[red]Platform must be 'prometheus', 'grafana', or 'loki'.[/]")
             continue
 
         host = typer.prompt("Host (IP or FQDN)").strip()
@@ -140,10 +142,30 @@ def init_cmd() -> None:
             if am_url:
                 entry["alertmanager_url"] = am_url
 
+        auth_type = AUTH_BEARER
+        if platform == PLATFORM_LOKI:
+            auth_type = typer.prompt(
+                f"Auth type ({AUTH_BEARER} / {AUTH_BASIC})", default=AUTH_BEARER
+            ).strip().lower()
+            if auth_type not in (AUTH_BEARER, AUTH_BASIC):
+                console.print("[red]Auth type must be 'bearer' or 'basic'.[/]")
+                continue
+            entry["auth_type"] = auth_type
+            org_id = typer.prompt(
+                "Multi-tenant org id (X-Scope-OrgID; blank for single-tenant)", default=""
+            ).strip()
+            if org_id:
+                entry["org_id"] = org_id
+
         required = platform == PLATFORM_GRAFANA
-        prompt = "Grafana API/service-account token" if required else (
-            "Prometheus bearer token (optional — blank if unauthenticated)"
-        )
+        if platform == PLATFORM_GRAFANA:
+            prompt = "Grafana API/service-account token"
+        elif platform == PLATFORM_LOKI and auth_type == AUTH_BASIC:
+            prompt = "Loki basic-auth credential 'user:password' (optional)"
+        elif platform == PLATFORM_LOKI:
+            prompt = "Loki bearer token (optional — blank if unauthenticated)"
+        else:
+            prompt = "Prometheus bearer token (optional — blank if unauthenticated)"
         token = getpass.getpass(f"{prompt} for '{name}' (hidden): ")
         if token:
             store = store.set(name, token)

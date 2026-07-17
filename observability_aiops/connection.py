@@ -10,12 +10,16 @@ platform:
   * **Grafana** — the HTTP API. ``graf_get`` / ``graf_post`` / ``graf_put`` /
     ``graf_delete`` hit ``/api/...`` for dashboards, datasources, folders,
     annotations, and health.
+  * **Loki** — the Grafana Loki HTTP API. ``loki_get`` hits ``/loki/api/v1/...``
+    (and ``/ready``) read endpoints for labels, label values, and LogQL
+    ``query_range`` log/metric reads. Loki is read-only in this tool.
 
-Both platforms authenticate with a bearer token when one is configured (required
-for Grafana, optional for a self-hosted Prometheus). Platform-specific methods
-guard on ``platform`` and raise a clear ``ObservabilityApiError`` if called
-against the wrong platform, so a Grafana-only tool can't silently misfire at a
-Prometheus target.
+Platforms authenticate with a token when one is configured (required for Grafana,
+optional for a self-hosted Prometheus/Loki). A Loki target may use ``basic`` auth
+(the stored secret is ``user:password``) and may carry a multi-tenant
+``X-Scope-OrgID`` header. Platform-specific methods guard on ``platform`` and
+raise a clear ``ObservabilityApiError`` if called against the wrong platform, so
+a Grafana-only tool can't silently misfire at a Prometheus target.
 
 The httpx client is injectable for tests (``client=``); mock responses expose
 ``status_code``, ``content``, ``text``, and ``json()``.
@@ -23,12 +27,15 @@ The httpx client is injectable for tests (``client=``); mock responses expose
 
 from __future__ import annotations
 
+import base64
 from typing import Any
 
 import httpx
 
 from observability_aiops.config import (
+    AUTH_BASIC,
     PLATFORM_GRAFANA,
+    PLATFORM_LOKI,
     PLATFORM_PROMETHEUS,
     AppConfig,
     TargetConfig,
@@ -76,8 +83,17 @@ class ObservabilityConnection:
     def __init__(self, target: TargetConfig, client: Any | None = None) -> None:
         self._target = target
         headers = {"Accept": "application/json"}
-        if target.secret:
-            headers["Authorization"] = f"Bearer {target.secret}"
+        secret = target.secret
+        if secret:
+            if target.auth_type == AUTH_BASIC:
+                encoded = base64.b64encode(secret.encode("utf-8")).decode("ascii")
+                headers["Authorization"] = f"Basic {encoded}"
+            else:
+                headers["Authorization"] = f"Bearer {secret}"
+        # Multi-tenant Loki/Cortex scope header (harmless when the backend is
+        # single-tenant; only set when the operator configured a tenant).
+        if target.org_id:
+            headers["X-Scope-OrgID"] = target.org_id
         self._client = client or httpx.Client(
             base_url=target.base_url,
             verify=target.verify_ssl,
@@ -163,6 +179,16 @@ class ObservabilityConnection:
         """DELETE a Grafana ``/api`` resource (governed writes)."""
         self._require(PLATFORM_GRAFANA, "graf_delete")
         return self._request("DELETE", path)
+
+    # ── Loki HTTP API (read-only) ────────────────────────────────────────
+    def loki_get(self, path: str, params: dict | None = None) -> Any:
+        """GET a Loki ``/loki/api/v1`` (or ``/ready``) read endpoint.
+
+        Loki exposes no safe write surface here, so there is intentionally no
+        ``loki_post`` / ``loki_delete`` counterpart.
+        """
+        self._require(PLATFORM_LOKI, "loki_get")
+        return self._request("GET", path, params=params or None)
 
     def close(self) -> None:
         self._client.close()

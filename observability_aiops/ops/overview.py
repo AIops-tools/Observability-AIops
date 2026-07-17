@@ -10,9 +10,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from observability_aiops.config import PLATFORM_GRAFANA, PLATFORM_PROMETHEUS
+from observability_aiops.config import PLATFORM_GRAFANA, PLATFORM_LOKI, PLATFORM_PROMETHEUS
 from observability_aiops.ops import alerts as al
 from observability_aiops.ops import grafana as gf
+from observability_aiops.ops import loki as lk
 from observability_aiops.ops import rules as ru
 from observability_aiops.ops import targets as tg
 
@@ -58,6 +59,14 @@ def _grafana_overview(conn: Any, errors: list[str]) -> dict:
     }
 
 
+def _loki_overview(conn: Any, errors: list[str]) -> dict:
+    labels = lk.loki_labels(conn)
+    if "error" in labels:
+        errors.append(f"labels: {labels['error']}")
+        labels = {}
+    return {"labelNames": labels.get("total")}
+
+
 def observability_overview(conn: Any) -> dict:
     """[READ] Platform-aware health snapshot for the target."""
     errors: list[str] = []
@@ -66,6 +75,8 @@ def observability_overview(conn: Any) -> dict:
         body = _prometheus_overview(conn, errors)
     elif platform == PLATFORM_GRAFANA:
         body = _grafana_overview(conn, errors)
+    elif platform == PLATFORM_LOKI:
+        body = _loki_overview(conn, errors)
     else:  # pragma: no cover — config validation prevents this
         body = {}
     return {

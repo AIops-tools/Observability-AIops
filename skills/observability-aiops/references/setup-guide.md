@@ -1,9 +1,9 @@
 # observability-aiops setup & security guide
 
-> Preview / mock-only — not yet validated against a live stack. **Prometheus and
-> Grafana are both free/open-source and trivial to stand up in a lab
-> (`docker run prom/prometheus`, `grafana/grafana`), so a live `doctor` check is
-> easy.**
+> Preview / mock-only — not yet validated against a live stack. **Prometheus,
+> Grafana, and Loki are all free/open-source and trivial to stand up in a lab
+> (`docker run prom/prometheus`, `grafana/grafana`, `grafana/loki`), so a live
+> `doctor` check is easy.**
 
 ## 1. Install
 
@@ -19,6 +19,10 @@ uv tool install observability-aiops
 - **Grafana** — a **service-account token** (Administration → Service accounts →
   Add token) or legacy API key is **required**. Grafana's HTTP API is on port
   **3000**.
+- **Loki** — auth is **optional** (bearer token, or per-target `basic` auth where
+  the stored secret is `user:password`). The HTTP API is on port **3100**. For a
+  multi-tenant deployment set `org_id` to send the `X-Scope-OrgID` header. Loki is
+  **read-only** here.
 
 ## 3. Onboard
 
@@ -26,13 +30,14 @@ uv tool install observability-aiops
 observability-aiops init
 ```
 
-The wizard asks, per target, for the **platform** (`prometheus` / `grafana`), the
-**host**, the **scheme** (`http` / `https`), the **port** (defaults 9090 for
-Prometheus, 3000 for Grafana), an optional **Alertmanager URL** (Prometheus
-only), and the **token** — required for Grafana, optional for Prometheus.
-Non-secret connection details go to `~/.observability-aiops/config.yaml`; the
-token is stored **encrypted** into `~/.observability-aiops/secrets.enc`. Example
-config (one config can span the whole stack):
+The wizard asks, per target, for the **platform** (`prometheus` / `grafana` /
+`loki`), the **host**, the **scheme** (`http` / `https`), the **port** (defaults
+9090 for Prometheus, 3000 for Grafana, 3100 for Loki), an optional **Alertmanager
+URL** (Prometheus only), the **auth type** and **org id** (Loki only), and the
+**token** — required for Grafana, optional for Prometheus/Loki. Non-secret
+connection details go to `~/.observability-aiops/config.yaml`; the token is stored
+**encrypted** into `~/.observability-aiops/secrets.enc`. Example config (one config
+can span the whole stack):
 
 ```yaml
 targets:
@@ -48,6 +53,13 @@ targets:
     scheme: https
     port: 3000
     verify_ssl: true
+  - name: prod-loki
+    platform: loki
+    host: 10.0.0.40
+    scheme: http
+    port: 3100
+    auth_type: bearer        # or 'basic' (secret is user:password)
+    org_id: team-a           # optional; sent as X-Scope-OrgID (multi-tenant)
 ```
 
 ## 4. Non-interactive use (MCP server / CI / cron)
@@ -105,4 +117,18 @@ observability-aiops doctor
 `doctor` is platform-aware: it checks the config file, the encrypted store and its
 permissions, that a token is present where required, and (unless `--skip-auth`)
 connectivity — `/api/v1/status/buildinfo` for Prometheus targets, `/api/health`
-for Grafana targets.
+for Grafana targets, and `/ready` + `/loki/api/v1/status/buildinfo` for Loki
+targets.
+
+## Loki query bounding (safety)
+
+Loki reads are deliberately bounded so an agent can't ask for "all logs, forever":
+
+- Every `loki_query` must carry a `{…}` **stream selector** — an unbounded query
+  with no selector (or an empty query) is rejected with a teaching error.
+- Lookback is capped at **24h** (`MAX_LOOKBACK_HOURS`); a longer window is refused.
+- Returned lines are clamped to **1000** (`MAX_LINE_LIMIT`, default 100).
+- `loki_tail_errors` wraps a selector with a canned case-insensitive error filter.
+- Label values interpolated into a selector are backslash-escaped and label names
+  in a path segment are percent-encoded, so a hostile label value can't break out
+  of the LogQL string or rewrite the request path.

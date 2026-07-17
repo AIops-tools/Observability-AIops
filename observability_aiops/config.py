@@ -2,15 +2,19 @@
 
 Loads self-hosted observability connection targets from a YAML config file. Each
 target names its ``platform`` — ``prometheus`` (Prometheus HTTP API, optionally
-fronting an Alertmanager) or ``grafana`` (Grafana HTTP API) — so one config can
-span a whole observability stack.
+fronting an Alertmanager), ``grafana`` (Grafana HTTP API), or ``loki`` (Grafana
+Loki log-store HTTP API) — so one config can span a whole observability stack.
 
 The token is NEVER stored in the config file or in plaintext on disk: it lives
 in the encrypted store ``~/.observability-aiops/secrets.enc`` (see
-:mod:`observability_aiops.secretstore`). For Prometheus a bearer token is
+:mod:`observability_aiops.secretstore`). For Prometheus and Loki a token is
 *optional* (many self-hosted deployments are unauthenticated); for Grafana a
 service-account/API token is *required*. A legacy env var
 (``OBSERVABILITY_<TARGET>_TOKEN``) is honoured as a fallback.
+
+A Loki target may additionally carry ``auth_type`` (``bearer`` — the default —
+or ``basic``, in which case the stored secret is ``user:password``) and
+``org_id`` (sent as the multi-tenant ``X-Scope-OrgID`` header).
 """
 
 from __future__ import annotations
@@ -31,14 +35,22 @@ ENV_FILE = CONFIG_DIR / ".env"
 
 PLATFORM_PROMETHEUS = "prometheus"
 PLATFORM_GRAFANA = "grafana"
-PLATFORMS = (PLATFORM_PROMETHEUS, PLATFORM_GRAFANA)
+PLATFORM_LOKI = "loki"
+PLATFORMS = (PLATFORM_PROMETHEUS, PLATFORM_GRAFANA, PLATFORM_LOKI)
 
 # Platforms that must carry a token (Grafana rejects unauthenticated API calls;
-# self-hosted Prometheus is frequently unauthenticated, so its token is optional).
+# self-hosted Prometheus and Loki are frequently unauthenticated, so their
+# token is optional).
 TOKEN_REQUIRED = (PLATFORM_GRAFANA,)
 
-# Sensible default ports per platform (Prometheus web / Grafana web).
-DEFAULT_PORTS = {PLATFORM_PROMETHEUS: 9090, PLATFORM_GRAFANA: 3000}
+# Per-target authentication schemes (Loki honours both; a Prometheus/Grafana
+# token is always a bearer token).
+AUTH_BEARER = "bearer"
+AUTH_BASIC = "basic"
+AUTH_TYPES = (AUTH_BEARER, AUTH_BASIC)
+
+# Sensible default ports per platform (Prometheus web / Grafana web / Loki HTTP).
+DEFAULT_PORTS = {PLATFORM_PROMETHEUS: 9090, PLATFORM_GRAFANA: 3000, PLATFORM_LOKI: 3100}
 
 SECRET_ENV_PREFIX = "OBSERVABILITY_"  # nosec B105 — env-var name, not a secret
 SECRET_ENV_SUFFIX = "_TOKEN"  # nosec B105 — env-var name, not a secret
@@ -83,10 +95,12 @@ def _resolve_secret(name: str, *, required: bool) -> str:
 class TargetConfig:
     """A connection target for one observability platform instance.
 
-    ``platform`` is ``prometheus`` or ``grafana``. Non-secret connection details
-    (scheme/host/port) live in the config file; the bearer token comes from the
-    encrypted store. ``alertmanager_url`` (Prometheus only) points the alert
-    tools at a companion Alertmanager when it is not co-located.
+    ``platform`` is ``prometheus``, ``grafana``, or ``loki``. Non-secret
+    connection details (scheme/host/port) live in the config file; the token
+    comes from the encrypted store. ``alertmanager_url`` (Prometheus only) points
+    the alert tools at a companion Alertmanager when it is not co-located.
+    ``auth_type`` (``bearer`` default / ``basic``) and ``org_id`` (multi-tenant
+    ``X-Scope-OrgID``) are Loki-oriented but stored uniformly.
     """
 
     name: str
@@ -96,6 +110,8 @@ class TargetConfig:
     scheme: str = "http"
     verify_ssl: bool = True
     alertmanager_url: str = ""
+    auth_type: str = AUTH_BEARER
+    org_id: str = ""
 
     def __post_init__(self) -> None:
         if self.platform not in PLATFORMS:
@@ -107,6 +123,11 @@ class TargetConfig:
             raise ValueError(
                 f"Target '{self.name}': scheme must be 'http' or 'https', "
                 f"got '{self.scheme}'."
+            )
+        if self.auth_type not in AUTH_TYPES:
+            raise ValueError(
+                f"Target '{self.name}': auth_type must be one of {AUTH_TYPES}, "
+                f"got '{self.auth_type}'."
             )
         if not self.port:
             object.__setattr__(self, "port", DEFAULT_PORTS[self.platform])
@@ -173,6 +194,8 @@ def load_config(config_path: Path | None = None) -> AppConfig:
             scheme=t.get("scheme", "http"),
             verify_ssl=t.get("verify_ssl", True),
             alertmanager_url=t.get("alertmanager_url", ""),
+            auth_type=t.get("auth_type", AUTH_BEARER),
+            org_id=t.get("org_id", ""),
         )
         for t in raw.get("targets", [])
     )

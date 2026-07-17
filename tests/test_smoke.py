@@ -32,6 +32,9 @@ EXPECTED_TOOLS = {
     "observability_overview",
     # analysis
     "firing_alert_rca", "target_scrape_health_analysis", "alert_noise_and_flap_analysis",
+    # loki (reads + log analyses + cross-signal)
+    "loki_labels", "loki_label_values", "loki_query", "loki_tail_errors",
+    "log_error_burst_rca", "log_volume_analysis", "alert_log_context",
     # writes
     "create_silence", "expire_silence", "create_annotation", "update_dashboard",
     "delete_dashboard", "reload_prometheus_config",
@@ -48,15 +51,17 @@ def test_all_modules_import():
         "observability_aiops.ops.rules", "observability_aiops.ops.alerts",
         "observability_aiops.ops.grafana", "observability_aiops.ops.analysis",
         "observability_aiops.ops.writes", "observability_aiops.ops.overview",
-        "observability_aiops.ops.prom_status",
+        "observability_aiops.ops.prom_status", "observability_aiops.ops.loki",
+        "observability_aiops.ops.log_analysis",
         "observability_aiops.cli", "observability_aiops.cli._root",
         "observability_aiops.cli._common", "observability_aiops.cli.init",
         "observability_aiops.cli.secret", "observability_aiops.cli.query",
+        "observability_aiops.cli.logs",
         "observability_aiops.cli.alert", "observability_aiops.cli.overview",
         "observability_aiops.cli.doctor",
         "mcp_server.server", "mcp_server._shared",
         "mcp_server.tools.metrics", "mcp_server.tools.writes",
-        "mcp_server.tools.analysis",
+        "mcp_server.tools.analysis", "mcp_server.tools.loki",
     ):
         importlib.import_module(name)
 
@@ -82,7 +87,7 @@ def test_cli_app_builds_and_help_works():
     runner = CliRunner()
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    for sub in ("query", "alert", "secret", "init", "overview", "doctor", "mcp"):
+    for sub in ("query", "logs", "alert", "secret", "init", "overview", "doctor", "mcp"):
         assert sub in result.output
 
 
@@ -96,6 +101,8 @@ def test_cli_leaf_help_triggers_lazy_imports():
         ["doctor", "--help"], ["overview", "--help"], ["init", "--help"],
         ["query", "instant", "--help"], ["query", "range", "--help"],
         ["query", "labels", "--help"],
+        ["logs", "--help"], ["logs", "labels", "--help"], ["logs", "query", "--help"],
+        ["logs", "errors", "--help"],
         ["alert", "firing", "--help"], ["alert", "silences", "--help"],
         ["alert", "rca", "--help"],
         ["secret", "list", "--help"], ["secret", "set", "--help"],

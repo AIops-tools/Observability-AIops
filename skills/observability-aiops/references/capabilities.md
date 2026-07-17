@@ -1,9 +1,11 @@
 # observability-aiops capability matrix
 
-> Preview / mock-only. **30 MCP tools** (24 read, 6 write) across Prometheus
+> Preview / mock-only. **37 MCP tools** (31 read, 6 write) across Prometheus
 > (HTTP API + PromQL, default port 9090, optional bearer token), a companion
-> Alertmanager (`/api/v2`, port 9093), and Grafana (HTTP API, port 3000, required
-> bearer token). Responses are mocked and need live verification.
+> Alertmanager (`/api/v2`, port 9093), Grafana (HTTP API, port 3000, required
+> bearer token), and Grafana Loki (HTTP API, port 3100, optional bearer/basic
+> auth, optional multi-tenant `X-Scope-OrgID`). Loki is **read-only**. Responses
+> are mocked and need live verification.
 
 ## Metrics — Prometheus (read)
 
@@ -50,14 +52,38 @@
 | `datasource_health` | `/api/datasources/{id}/health` | one datasource's health (status, message) |
 | `list_folders` | `/api/folders` | Grafana folders |
 
+## Loki — logs (read)
+
+| Tool | API path | Returns |
+|------|----------|---------|
+| `loki_labels` | `/loki/api/v1/labels` | distinct label names in the lookback window |
+| `loki_label_values` | `/loki/api/v1/label/<name>/values` | distinct values of one label (name percent-encoded) |
+| `loki_query` | `/loki/api/v1/query_range` | bounded LogQL passthrough — **requires a stream selector**; lookback capped at `MAX_LOOKBACK_HOURS=24`, lines clamped to `MAX_LINE_LIMIT=1000` (default 100) |
+| `loki_tail_errors` | `/loki/api/v1/query_range` | canned error-level read for a selector (line-filter on `(?i)(error\|fatal\|panic\|exception\|traceback\|stacktrace)`) |
+
+Bounding gate: a LogQL query with **no `{…}` stream selector**, an empty query,
+or a lookback beyond the cap is rejected up front with a teaching error — no
+unbounded scan is ever issued. Label values interpolated into a selector are
+backslash-escaped; label names in a path are percent-encoded. Loki auth is
+optional (bearer or, per target, `basic` with a `user:password` secret) and a
+multi-tenant `X-Scope-OrgID` header is sent when the target sets `org_id`.
+
 ## Overview & flagship analyses (read)
 
 | Tool | Inputs | Returns |
 |------|--------|---------|
-| `observability_overview` | platform-aware | Prometheus: firing count + targets up/down + rules erroring; Grafana: dashboard/datasource/folder counts |
+| `observability_overview` | platform-aware | Prometheus: firing count + targets up/down + rules erroring; Grafana: dashboard/datasource/folder counts; Loki: label-name count |
 | `firing_alert_rca` | firing alerts + alerting rules | each firing alert joined to its rule expr, ranked by severity, mapped to a likely **cause + action** |
 | `target_scrape_health_analysis` | active targets | down/erroring scrapes ranked, each `lastError` classified (refused/timeout/auth/DNS/TLS) with a fix |
 | `alert_noise_and_flap_analysis` | alert instances | alertnames with many instances / exact duplicates flagged with a group_by / inhibition / longer-`for` recommendation |
+
+## Loki — log analyses & cross-signal (read)
+
+| Tool | Inputs | Returns |
+|------|--------|---------|
+| `log_error_burst_rca` | selector + window (pulls current + baseline error streams) | per-stream error counts vs a baseline window; each burst classified **new_signature** (baseline 0), **volume_spike** (>= `burst_ratio`×baseline), or **single_instance** (localized to one pod/instance) with a cause + action + sample lines |
+| `log_volume_analysis` | selector + window (pulls streams + `index/stats`) | top streams by line volume, high-cardinality (high-churn) label warnings, and a retention hint from total ingest bytes |
+| `alert_log_context` | firing alertname (Prometheus) + Loki target | maps the alert's labels → a Loki stream selector (intersect with namespace/job/service/app/container/pod/instance/component, first 4 in priority order; values escaped) and returns the correlated error streams. **Best-effort**: only labels the alert and Loki share will match |
 
 ## Writes (governed)
 
@@ -70,10 +96,15 @@
 | `delete_dashboard` | **HIGH** | `DELETE /api/dashboards/uid/{uid}` | `dry_run` + approver; captures prior model **BEFORE** delete; undo → recreate |
 | `reload_prometheus_config` | **med** | `POST /-/reload` | records the pre-reload config hash; no undo (re-apply the prior config file) |
 
+**No Loki writes.** Loki exposes no safe operational write surface here (no
+silence/annotation analogue), so this tool ships Loki as read-only by design.
+
 ## Out of scope (by design)
 
 - **Hosted/SaaS monitoring** — Datadog, New Relic, and enterprise NMS (only
-  self-hosted Prometheus + Grafana here)
+  self-hosted Prometheus + Grafana + Loki here)
+- **Loki writes / ingestion / deletes** — read-only LogQL only (no push, no
+  delete-series, no ruler/config writes)
 - **Creating/editing Prometheus rules or scrape config**, and provisioning
   Grafana datasources/dashboards from scratch (beyond update/delete of an existing
   dashboard)
