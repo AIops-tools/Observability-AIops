@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from observability_aiops.ops._util import as_obj, num, prom_data, rows, s
+from observability_aiops.ops._util import as_obj, num, opt, prom_data, rows, s
 
 _MAX_ROWS = 500
 
@@ -21,11 +21,11 @@ def _active(target: dict) -> dict:
     return {
         "job": s(labels.get("job")),
         "instance": s(labels.get("instance")),
-        "scrapePool": s(target.get("scrapePool")),
+        "scrapePool": opt(target.get("scrapePool")),
         "scrapeUrl": s(target.get("scrapeUrl")),
         "health": s(target.get("health"), 16),
-        "lastError": s(target.get("lastError")),
-        "lastScrape": s(target.get("lastScrape"), 64),
+        "lastError": opt(target.get("lastError")),
+        "lastScrape": opt(target.get("lastScrape"), 64),
         "lastScrapeDurationSeconds": num(target.get("lastScrapeDuration")),
     }
 

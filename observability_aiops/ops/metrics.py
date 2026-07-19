@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from observability_aiops.ops._util import _seg, num, prom_data, rows, s
+from observability_aiops.ops._util import _seg, num, opt, prom_data, rows, s
 
 _MAX_SERIES = 500
 _MAX_POINTS = 500
@@ -33,7 +33,11 @@ def _samples(result: list, limit: int = _MAX_SERIES) -> list[dict]:
 
 
 def instant_query(conn: Any, query: str, time: str | None = None) -> dict:
-    """[READ] Evaluate a PromQL expression at a single instant (``/api/v1/query``)."""
+    """[READ] Evaluate a PromQL expression at a single instant (``/api/v1/query``).
+
+    Series beyond the internal cap are dropped; ``returned`` / ``limit`` /
+    ``truncated`` say so explicitly rather than leaving the caller to guess.
+    """
     try:
         params: dict[str, Any] = {"query": query}
         if time:
@@ -45,16 +49,23 @@ def instant_query(conn: Any, query: str, time: str | None = None) -> dict:
         return {"error": s(exc, 200), "query": s(query, 200)}
     return {
         "query": s(query, 200),
-        "resultType": s((data or {}).get("resultType"), 32),
+        "resultType": opt((data or {}).get("resultType"), 32),
         "series": len(samples),
         "samples": samples,
+        "returned": len(samples),
+        "limit": _MAX_SERIES,
+        "truncated": len(result) > _MAX_SERIES,
     }
 
 
 def range_query(
     conn: Any, query: str, start: str, end: str, step: str = "60s"
 ) -> dict:
-    """[READ] Evaluate PromQL over a time range (``/api/v1/query_range``)."""
+    """[READ] Evaluate PromQL over a time range (``/api/v1/query_range``).
+
+    Series beyond the internal cap are dropped; ``returned`` / ``limit`` /
+    ``truncated`` say so explicitly rather than leaving the caller to guess.
+    """
     try:
         params = {"query": query, "start": start, "end": end, "step": step}
         data = prom_data(conn.prom_get("/api/v1/query_range", params))
@@ -82,6 +93,9 @@ def range_query(
         "step": s(step, 32),
         "series": len(series),
         "results": series,
+        "returned": len(series),
+        "limit": _MAX_SERIES,
+        "truncated": len(result) > _MAX_SERIES,
     }
 
 
@@ -97,7 +111,15 @@ def label_values(conn: Any, label: str = "__name__", match: str | None = None) -
         values = [s(v, 128) for v in (data or []) if isinstance(v, str)]
     except Exception as exc:  # noqa: BLE001 — report as partial
         return {"error": s(exc, 200), "label": s(label, 64)}
-    return {"label": s(label, 64), "total": len(values), "values": values[:_MAX_SERIES]}
+    shown = values[:_MAX_SERIES]
+    return {
+        "label": s(label, 64),
+        "values": shown,
+        "total": len(values),
+        "returned": len(shown),
+        "limit": _MAX_SERIES,
+        "truncated": len(values) > _MAX_SERIES,
+    }
 
 
 def series_metadata(
@@ -117,4 +139,12 @@ def series_metadata(
         ]
     except Exception as exc:  # noqa: BLE001 — report as partial
         return {"error": s(exc, 200), "match": s(match, 200)}
-    return {"match": s(match, 200), "total": len(series), "series": series[:_MAX_SERIES]}
+    shown = series[:_MAX_SERIES]
+    return {
+        "match": s(match, 200),
+        "series": shown,
+        "total": len(series),
+        "returned": len(shown),
+        "limit": _MAX_SERIES,
+        "truncated": len(series) > _MAX_SERIES,
+    }

@@ -17,6 +17,10 @@ def instant_query(query: str, time: Optional[str] = None, target: Optional[str] 
         query: A PromQL expression (e.g. 'up' or 'rate(http_requests_total[5m])').
         time: Optional RFC-3339 or unix timestamp for the evaluation instant.
         target: Prometheus target name from config; omit for the default.
+
+    Returns an envelope with ``returned``/``limit``/``truncated``. If
+    ``truncated`` is true the result is partial — narrow the selector or raise
+    the limit rather than treating it as complete.
     """
     return ops.instant_query(_get_connection(target), query, time)
 
@@ -35,6 +39,10 @@ def range_query(
         end: Range end (RFC-3339 or unix timestamp).
         step: Resolution step (e.g. '60s', '5m').
         target: Prometheus target name from config; omit for the default.
+
+    Returns an envelope with ``returned``/``limit``/``truncated``. If
+    ``truncated`` is true the result is partial — narrow the selector or raise
+    the limit rather than treating it as complete.
     """
     return ops.range_query(_get_connection(target), query, start, end, step)
 
@@ -51,6 +59,10 @@ def label_values(
         label: Label name to enumerate (default __name__).
         match: Optional PromQL selector to scope the values (e.g. '{job="api"}').
         target: Prometheus target name from config; omit for the default.
+
+    Returns an envelope with ``returned``/``limit``/``truncated``. If
+    ``truncated`` is true the result is partial — narrow the selector or raise
+    the limit rather than treating it as complete.
     """
     return ops.label_values(_get_connection(target), label, match)
 
@@ -68,5 +80,9 @@ def series_metadata(
         start: Optional range start (RFC-3339 or unix timestamp).
         end: Optional range end (RFC-3339 or unix timestamp).
         target: Prometheus target name from config; omit for the default.
+
+    Returns an envelope with ``returned``/``limit``/``truncated``. If
+    ``truncated`` is true the result is partial — narrow the selector or raise
+    the limit rather than treating it as complete.
     """
     return ops.series_metadata(_get_connection(target), match, start, end)

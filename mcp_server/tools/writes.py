@@ -108,7 +108,7 @@ def expire_silence(silence_id: str, dry_run: bool = False, target: Optional[str]
 
 # ── Grafana annotations ──────────────────────────────────────────────────────
 @mcp.tool()
-@governed_tool(risk_level="low")
+@governed_tool(risk_level="medium")
 @tool_errors("dict")
 def create_annotation(
     text: str,
@@ -117,7 +117,7 @@ def create_annotation(
     dry_run: bool = False,
     target: Optional[str] = None,
 ) -> dict:
-    """[WRITE][risk=low] Create a Grafana annotation (an event marker).
+    """[WRITE][risk=medium] Create a Grafana annotation (an event marker).
 
     Args:
         text: Annotation text.

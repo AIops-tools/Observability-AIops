@@ -183,7 +183,7 @@ def test_write_risk_tiers():
 
     assert t.create_silence._risk_level == "medium"
     assert t.expire_silence._risk_level == "medium"
-    assert t.create_annotation._risk_level == "low"
+    assert t.create_annotation._risk_level == "medium"
     assert t.update_dashboard._risk_level == "medium"
     assert t.delete_dashboard._risk_level == "high"
     assert t.reload_prometheus_config._risk_level == "medium"

@@ -7,7 +7,13 @@ from typing import Annotated
 
 import typer
 
-from observability_aiops.cli._common import TargetOption, cli_errors, console, get_connection
+from observability_aiops.cli._common import (
+    TargetOption,
+    cli_errors,
+    console,
+    get_connection,
+    warn_if_truncated,
+)
 
 logs_app = typer.Typer(
     name="logs",
@@ -41,7 +47,9 @@ def logs_query(
     from observability_aiops.ops import loki as ops
 
     conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.loki_query(conn, logql, hours, limit)))
+    result = ops.loki_query(conn, logql, hours, limit)
+    console.print_json(json.dumps(result))
+    warn_if_truncated(result)
 
 
 @logs_app.command("errors")
@@ -56,4 +64,6 @@ def logs_errors(
     from observability_aiops.ops import loki as ops
 
     conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.loki_tail_errors(conn, selector, hours, limit)))
+    result = ops.loki_tail_errors(conn, selector, hours, limit)
+    console.print_json(json.dumps(result))
+    warn_if_truncated(result)

@@ -102,7 +102,7 @@ def expire_silence(conn: Any, silence_id: str) -> dict:
 def create_annotation(
     conn: Any, text: str, tags: list[str] | None = None, dashboard_uid: str = ""
 ) -> dict:
-    """[WRITE][low] Create a Grafana annotation (an event marker)."""
+    """[WRITE][med] Create a Grafana annotation (an event marker)."""
     body: dict[str, Any] = {"text": text, "tags": list(tags or [])}
     if dashboard_uid:
         body["dashboardUID"] = dashboard_uid

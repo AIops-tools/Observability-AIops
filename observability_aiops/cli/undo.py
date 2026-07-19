@@ -19,6 +19,7 @@ from observability_aiops.cli._common import (
     console,
     double_confirm,
     dry_run_print,
+    warn_if_truncated,
 )
 
 undo_app = typer.Typer(
@@ -39,7 +40,9 @@ def undo_list_cmd(
     """List recorded, not-yet-applied undo tokens."""
     from mcp_server.tools import undo as gov
 
-    console.print_json(json.dumps(gov.undo_list(limit=limit, target=target)))
+    result = gov.undo_list(limit=limit, target=target)
+    console.print_json(json.dumps(result))
+    warn_if_truncated(result)
 
 
 @undo_app.command("apply")

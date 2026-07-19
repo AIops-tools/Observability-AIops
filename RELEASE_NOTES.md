@@ -1,61 +1,60 @@
-# Observability AIops v0.1.0 — preview
+# Release notes — observability-aiops 0.4.0
 
-Governed AI-ops for a **self-hosted observability stack** — **Prometheus** (HTTP
-API + PromQL), **Alertmanager** (alerts + silences), and **Grafana** (dashboards,
-datasources, folders) — for AI agents, with a built-in governance harness (audit,
-policy, token/runaway budget, undo-token recording, graduated risk tiers) and an
-encrypted credential store. Standalone — no external skill-family dependency. One
-config can span your whole stack.
+Previous release: 0.3.0.
 
-Positioned as the **self-hosted-observability** complement to enterprise
-monitoring suites: it speaks the open Prometheus/Grafana APIs directly.
-
-> **Preview / mock-only.** All behaviour is validated against mocked
-> Prometheus/Grafana/Alertmanager responses; it has not been run against a live
-> stack. Both platforms are free and open-source and trivial to stand up in a lab
-> (`docker run prom/prometheus`, `grafana/grafana`). The fastest live check is
-> `observability-aiops doctor`.
-
-## Highlights
-
-- **30 MCP tools** (24 read, 6 write), every one wrapped with `@governed_tool`.
-  - **Metrics (Prometheus)** — `instant_query`, `range_query`, `label_values`,
-    `series_metadata`.
-  - **Targets & status** — `list_targets`, `target_scrape_health`,
-    `dropped_targets`, `prometheus_config_status`, `prometheus_tsdb_status`.
-  - **Rules** — `list_rules`, `rule_health`.
-  - **Alerts** — `firing_alerts`, `pending_alerts`, `alertmanager_alerts`,
-    `list_silences`.
-  - **Grafana** — `list_dashboards`, `get_dashboard`, `list_datasources`,
-    `datasource_health`, `list_folders`.
-  - **Overview** — `observability_overview` (platform-aware snapshot).
-  - **Writes** — `create_silence`/`expire_silence` (med, time-boxed),
-    `create_annotation` (low), `update_dashboard` (med),
-    `delete_dashboard` (**high**), `reload_prometheus_config` (med).
-- **Three flagship analyses** — transparent heuristics that show their numbers:
-  `firing_alert_rca` (firing alert → rule expr → cause + action),
-  `target_scrape_health_analysis` (down/erroring scrapes ranked + classified),
-  and `alert_noise_and_flap_analysis` (noisy/duplicate alerts → dedup/rollup).
-- **Encrypted secret store** (`~/.observability-aiops/secrets.enc`, Fernet +
-  scrypt) — Prometheus/Grafana bearer tokens, never plaintext on disk; legacy
-  `OBSERVABILITY_<TARGET>_TOKEN` env fallback.
-- **Guarded writes** — the destructive op (`delete_dashboard`) requires dry-run +
-  an approver; reversible writes capture the **real fetched before-state** and
-  record an undo; silences are time-boxed (require a positive duration).
-- **CLI** with an `init` platform-picking wizard, `secret` management, PromQL
-  `query`, `alert` (firing/silences/rca), and a platform-aware `doctor`.
-
-## Install
+## Headline: read-only mode
 
 ```bash
-uv tool install observability-aiops
-observability-aiops init       # pick platform (prometheus/grafana) + store the token
-observability-aiops doctor
+export OBSERVABILITY_READ_ONLY=1
 ```
 
-## Caveats
+With this set the **7 write tools are never registered** — an MCP
+client lists **32 tools instead of 39**. The writes are not hidden
+behind a flag and not merely refused on call: they are absent from the session,
+so a model cannot invoke one and cannot be argued into one. For a reviewer this
+is checkable rather than promised — connect, list the tools, and the writes are
+not there.
 
-- Preview / mock-only: the Prometheus and Grafana HTTP API responses are mocked
-  and need live verification.
-- Hosted/SaaS monitoring suites (Datadog, New Relic, enterprise NMS) are out of
-  scope by design.
+Enforcement is two layers deep: the `@governed_tool` harness refuses every
+non-read operation (covering the CLI and in-process callers too), and the MCP
+server removes write tools from `list_tools()`. Changing entry point does not
+get around it.
+
+### Security fix included in this release
+
+1 tool(s) documented as writes were carrying `risk_level="low"`:
+`create_annotation`.
+
+Because the read/write split keys off `risk_level`, read-only mode would have
+left them **exposed and able to execute real writes**. They are now `medium`,
+and a new test asserts `risk_level` can never again disagree with a tool's own
+`[READ]`/`[WRITE]` documentation.
+
+## BREAKING — return shapes changed
+
+This release changes payloads that callers may be parsing. All three changes exist
+to stop a result from misrepresenting itself:
+
+1. **Absent fields are now `null`, not `""`.** A missing value and an empty value
+   were previously indistinguishable, which invited consumers to invent the
+   difference. Keys are still always present — only the value may be null.
+2. **Anything with a `limit` now returns an envelope** —
+   `{"<items>": [...], "returned": N, "limit": L, "truncated": bool}`. Truncation is
+   *measured* (one extra row is fetched), never inferred from the page happening to
+   be full. Where a genuine pre-cap total is knowable it is reported as `total`;
+   where it isn't, `total` is deliberately omitted rather than echoing `returned`.
+3. **`risk_level` changed on some tools** (see above). If your `rules.yaml` matches
+   on risk level, re-check those rules.
+
+## Also in this release
+
+- **`docs/VERIFICATION.md`** — what the mock suite actually guarantees, a live
+  verification checklist, and the criteria for claiming this tool verified.
+- **`skills/observability-aiops/references/agent-guardrails.md`** — for driving this tool with a
+  smaller / local model: which guardrails are now enforced for you, and a
+  ready-made system prompt for the rest.
+- Expanded operator playbooks in the skill documentation.
+- The advertised tool count now matches what an MCP client actually lists
+  (it includes `undo_list` / `undo_apply`), and a release gate keeps it honest.
+- The `(preview)` label has been dropped. It never meant unreleased; verification
+  status now lives in `docs/VERIFICATION.md` where it can be specific.

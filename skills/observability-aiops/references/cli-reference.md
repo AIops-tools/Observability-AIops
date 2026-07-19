@@ -1,9 +1,10 @@
 # observability-aiops CLI reference
 
-> Preview / mock-only. Covers Prometheus (HTTP API + PromQL), a companion
-> Alertmanager, Grafana (HTTP API), and Grafana Loki (LogQL, read-only);
-> responses are mocked and need live verification. The CLI is a convenience
-> subset — the full 37-tool surface is via the MCP server
+> Covers Prometheus (HTTP API + PromQL), a companion Alertmanager, Grafana
+> (HTTP API), and Grafana Loki (LogQL, read-only). The Prometheus/Alertmanager/
+> Grafana surfaces have been exercised against a live Prometheus 3.x + Alertmanager + Grafana 13 stack;
+> the Loki surface has not (see docs/VERIFICATION.md). The CLI is a convenience
+> subset — the full 39-tool surface is via the MCP server
 > (`observability-aiops mcp`).
 
 ## Setup & diagnostics

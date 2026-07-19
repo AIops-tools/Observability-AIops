@@ -75,7 +75,7 @@ def tool_errors(shape: str = "dict") -> Callable:
 mcp = FastMCP(
     "observability-aiops",
     instructions=(
-        "Self-hosted observability operations (preview) over Prometheus, "
+        "Self-hosted observability operations over Prometheus, "
         "Alertmanager, Grafana, and Grafana Loki: PromQL instant/range queries, "
         "label + series metadata; scrape-target health and dropped targets; "
         "recording/alerting rules and their health; firing/pending alerts, "

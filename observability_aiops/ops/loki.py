@@ -24,7 +24,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from observability_aiops.ops._util import _seg, as_obj, num, prom_data, s
+from observability_aiops.ops._util import _seg, as_obj, num, opt, prom_data, s
 
 # ── Bounding constants (named, not magic numbers) ────────────────────────────
 MAX_LOOKBACK_HOURS = 24
@@ -209,17 +209,58 @@ def error_streams_window(
 
 
 def _query_range_raw(
-    conn: Any, logql: str, start_ns: int, end_ns: int, limit: int
+    conn: Any, logql: str, start_ns: int, end_ns: int, limit: int, probe: bool = False
 ) -> Any:
-    """Issue a bounded ``/loki/api/v1/query_range`` and unwrap the envelope (may raise)."""
+    """Issue a bounded ``/loki/api/v1/query_range`` and unwrap the envelope (may raise).
+
+    With ``probe=True`` one extra line beyond the clamped limit is requested, so
+    the caller can *measure* whether the result was truncated instead of
+    inferring it from a length coincidence.
+    """
+    lines = _clamp_limit(limit) + (1 if probe else 0)
     params = {
         "query": logql,
         "start": str(start_ns),
         "end": str(end_ns),
-        "limit": str(_clamp_limit(limit)),
+        "limit": str(lines),
         "direction": "backward",
     }
     return prom_data(conn.loki_get("/loki/api/v1/query_range", params))
+
+
+def count_entries(data: Any) -> int:
+    """Total log/sample entries across every stream in a ``query_range`` result."""
+    result = data.get("result", []) if isinstance(data, dict) else []
+    total = 0
+    for item in result:
+        if isinstance(item, dict) and isinstance(item.get("values"), list):
+            total += len(item["values"])
+    return total
+
+
+def trim_entries(data: Any, budget: int) -> Any:
+    """Return a copy of a ``query_range`` result holding at most ``budget`` entries.
+
+    Immutable by construction — the upstream payload is never mutated. Streams
+    left with no entries are dropped rather than reported as empty.
+    """
+    if not isinstance(data, dict):
+        return data
+    remaining = max(0, int(budget))
+    kept: list[dict] = []
+    for item in data.get("result", []) or []:
+        if not isinstance(item, dict):
+            continue
+        values = item.get("values") or []
+        if not isinstance(values, list):
+            kept.append(item)
+            continue
+        if remaining <= 0:
+            break
+        take = values[:remaining]
+        remaining -= len(take)
+        kept.append({**item, "values": take})
+    return {**data, "result": kept}
 
 
 def loki_labels(conn: Any, hours: float = DEFAULT_LOOKBACK_HOURS) -> dict:
@@ -232,7 +273,14 @@ def loki_labels(conn: Any, hours: float = DEFAULT_LOOKBACK_HOURS) -> dict:
         labels = [s(v, 128) for v in (data or []) if isinstance(v, str)]
     except Exception as exc:  # noqa: BLE001 — report as partial
         return {"error": s(exc, 300)}
-    return {"total": len(labels), "labels": labels[:MAX_STREAMS]}
+    shown = labels[:MAX_STREAMS]
+    return {
+        "labels": shown,
+        "total": len(labels),
+        "returned": len(shown),
+        "limit": MAX_STREAMS,
+        "truncated": len(labels) > MAX_STREAMS,
+    }
 
 
 def loki_label_values(
@@ -249,7 +297,15 @@ def loki_label_values(
         values = [s(v, 128) for v in (data or []) if isinstance(v, str)]
     except Exception as exc:  # noqa: BLE001 — report as partial
         return {"error": s(exc, 300), "label": s(name, 64)}
-    return {"label": s(name, 64), "total": len(values), "values": values[:MAX_STREAMS]}
+    shown = values[:MAX_STREAMS]
+    return {
+        "label": s(name, 64),
+        "values": shown,
+        "total": len(values),
+        "returned": len(shown),
+        "limit": MAX_STREAMS,
+        "truncated": len(values) > MAX_STREAMS,
+    }
 
 
 def loki_query(
@@ -262,21 +318,31 @@ def loki_query(
 
     Enforces the bounding gate (stream selector required, lookback <=
     ``MAX_LOOKBACK_HOURS``, lines <= ``MAX_LINE_LIMIT``) before issuing the query.
+
+    One extra line is requested so ``truncated`` is *measured* rather than
+    inferred from the line count happening to equal the limit — a long result
+    that silently stops is exactly what gets reported as "no data returned".
     """
     try:
         q = validate_logql(logql)
         start, end = _window_ns(hours)
-        data = _query_range_raw(conn, q, start, end, limit)
+        requested = _clamp_limit(limit)
+        probed = _query_range_raw(conn, q, start, end, requested, probe=True)
+        truncated = count_entries(probed) > requested
+        data = trim_entries(probed, requested)
         streams = summarize_streams(data)
+        returned = count_entries(data)
     except Exception as exc:  # noqa: BLE001 — report as partial
         return {"error": s(exc, 300), "query": s(logql, 200)}
     return {
         "query": s(q, 200),
         "hours": _validate_hours(hours),
-        "limit": _clamp_limit(limit),
-        "resultType": s((data or {}).get("resultType"), 32) if isinstance(data, dict) else "",
+        "resultType": opt((data or {}).get("resultType"), 32) if isinstance(data, dict) else None,
         "streams": len(streams),
         "results": streams,
+        "returned": returned,
+        "limit": requested,
+        "truncated": truncated,
     }
 
 
@@ -286,12 +352,20 @@ def loki_tail_errors(
     hours: float = DEFAULT_LOOKBACK_HOURS,
     limit: int = DEFAULT_LINE_LIMIT,
 ) -> dict:
-    """[READ] Canned error-level read for a stream selector (error line-filter)."""
+    """[READ] Canned error-level read for a stream selector (error line-filter).
+
+    Returns ``returned`` / ``limit`` / ``truncated`` alongside the streams;
+    ``truncated`` is measured by requesting one line beyond the limit.
+    """
     try:
         q = validate_logql(error_query(selector))
         start, end = _window_ns(hours)
-        data = _query_range_raw(conn, q, start, end, limit)
+        requested = _clamp_limit(limit)
+        probed = _query_range_raw(conn, q, start, end, requested, probe=True)
+        truncated = count_entries(probed) > requested
+        data = trim_entries(probed, requested)
         streams = summarize_streams(data)
+        returned = count_entries(data)
     except Exception as exc:  # noqa: BLE001 — report as partial
         return {"error": s(exc, 300), "selector": s(selector, 200)}
     return {
@@ -300,6 +374,9 @@ def loki_tail_errors(
         "hours": _validate_hours(hours),
         "streams": len(streams),
         "results": streams,
+        "returned": returned,
+        "limit": requested,
+        "truncated": truncated,
     }
 
 

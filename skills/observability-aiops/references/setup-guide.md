@@ -1,6 +1,7 @@
 # observability-aiops setup & security guide
 
-> Preview / mock-only — not yet validated against a live stack. **Prometheus,
+> The Prometheus/Alertmanager/Grafana surfaces have been exercised against a live Prometheus 3.x + Alertmanager + Grafana 13 stack; the Loki surface has not
+> (see docs/VERIFICATION.md). **Prometheus,
 > Grafana, and Loki are all free/open-source and trivial to stand up in a lab
 > (`docker run prom/prometheus`, `grafana/grafana`, `grafana/loki`), so a live
 > `doctor` check is easy.**

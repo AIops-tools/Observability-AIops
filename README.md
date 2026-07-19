@@ -1,6 +1,6 @@
 <!-- mcp-name: io.github.AIops-tools/observability-aiops -->
 
-# Observability AIops (preview)
+# Observability AIops
 
 > **Disclaimer**: Community-maintained open-source project. **Not affiliated with, endorsed by, or sponsored by the Prometheus or Grafana projects, Grafana Labs, or the Cloud Native Computing Foundation.** Prometheus, Alertmanager and Grafana are trademarks of their respective owners. MIT licensed.
 
@@ -11,7 +11,9 @@ Governed AI-ops for a **self-hosted observability stack** in one server —
 governance harness**: unified audit log, policy engine, token/runaway budget
 guard, undo-token recording, and graduated-autonomy risk tiers. One config can
 span your whole stack; each target names its own `platform`.
-**Preview — mock-validated only, not yet verified against a live stack.**
+Beyond the mock test suite, the Prometheus/Alertmanager/Grafana reads, the RCAs,
+and the governed silence + dashboard write paths (with undo) have been exercised against a live Prometheus 3.x + Alertmanager + Grafana 13 stack — see
+[`docs/VERIFICATION.md`](docs/VERIFICATION.md).
 
 This is the **self-hosted-observability** complement to enterprise monitoring
 suites: it speaks the open Prometheus/Grafana APIs an SRE actually runs, not a
@@ -48,7 +50,47 @@ and guards the writes that follow:
   config — each audited, risk-tiered, `dry_run`-able, and the reversible ones
   capture the **real fetched before-state** for undo.
 
-## Capability matrix (37 MCP tools)
+## Security: read-only mode
+
+This tool is meant to be handed to an AI agent, so its safety story is enforced
+by the server rather than requested in a prompt:
+
+```bash
+export OBSERVABILITY_READ_ONLY=1
+```
+
+With that set, the **7 write tools are never registered**. An MCP client
+lists **32 tools instead of 39** — the writes are not hidden, not
+gated behind a flag, and not merely refused when called. They are absent from
+the session. A model cannot invoke a tool it was never offered, and cannot be
+argued into one.
+
+That distinction is the whole point. A tool that exists but refuses still invites
+retry loops and "I'll describe the call instead" behaviour from smaller models,
+and it leaves a reviewer trusting a promise. An absent tool is a fact you can
+check: connect, list the tools, and see that the writes are not there.
+
+Enforcement is two layers deep, so the switch cannot be sidestepped by changing
+entry point:
+
+| Layer | What it does | Covers |
+|---|---|---|
+| `@governed_tool` harness | refuses every non-read operation outright | MCP, CLI, and in-process callers |
+| MCP registration | write tools are removed from `list_tools()` | anything speaking MCP |
+
+Read operations are unaffected, and every call is still audited to
+`~/.observability-aiops/audit.db`.
+
+> The read/write split is derived from each tool's declared `risk_level`, and a
+> test asserts that this never disagrees with the `[READ]`/`[WRITE]` tag in the
+> tool's own documentation — so a write can't quietly present itself as a read.
+
+Running a smaller / local model? See
+[agent-guardrails.md](skills/observability-aiops/references/agent-guardrails.md) — it lists
+the guardrails this tool now enforces for you (so you don't spend prompt budget
+restating them) and gives a ready-made system prompt for what's left.
+
+## Capability matrix (39 MCP tools)
 
 | Group | Platform | Tools | Count | R/W |
 |-------|----------|-------|:-----:|:---:|
@@ -64,16 +106,18 @@ and guards the writes that follow:
 | **Log analyses** | Loki | `log_error_burst_rca`, `log_volume_analysis` | 2 | read |
 | **Cross-signal** | Prometheus + Loki | `alert_log_context` | 1 | read |
 | **Writes** | Alertmanager | `create_silence`, `expire_silence` | 2 | write (med) |
-| | Grafana | `create_annotation` | 1 | write (low) |
+| | Grafana | `create_annotation` | 1 | write (medium) |
 | | Grafana | `update_dashboard` | 1 | write (med) |
 | | Grafana | `delete_dashboard` | 1 | write (**high**) |
 | | Prometheus | `reload_prometheus_config` | 1 | write (med) |
+| **Undo** | all | `undo_list` | 1 | read |
+| | all | `undo_apply` | 1 | write (med) |
 
 **Loki is read-only** — Loki exposes no safe operational write surface (no
 silence/annotation analogue), so this tool deliberately ships no Loki writes.
 
 The CLI exposes a convenience subset (`query`, `logs`, `alert`, `overview`, …);
-the full 37-tool surface is via the MCP server.
+the full 39-tool surface is via the MCP server.
 
 ## Quick start
 
@@ -116,12 +160,15 @@ Every MCP tool passes through the bundled `@governed_tool` harness:
   API, and Grafana Loki HTTP API (read-only). Hosted/SaaS monitoring suites
   (Datadog, New Relic, enterprise NMS) are deliberately **out of scope** for this
   tool.
-- **Preview / mock-only.** All behaviour is validated against mocked
-  Prometheus/Grafana/Alertmanager/Loki responses. All are free and open-source and
-  trivial to stand up in a lab (`docker run prom/prometheus`, `grafana/grafana`,
+- **Verification.** The mock suite covers all four platforms; in addition the
+  Prometheus, Alertmanager and Grafana surfaces have been exercised against a live Prometheus 3.x + Alertmanager + Grafana 13 stack (RCAs, the
+  silence and dashboard governed writes, and undo replay). The **Loki** surface
+  has not yet been exercised live. All four are free and open-source and trivial
+  to stand up in a lab (`docker run prom/prometheus`, `grafana/grafana`,
   `grafana/loki`), so `observability-aiops doctor` is the fastest live check
   (Prometheus `/api/v1/status/buildinfo`, Grafana `/api/health`, Loki `/ready` +
-  `/loki/api/v1/status/buildinfo`).
+  `/loki/api/v1/status/buildinfo`). See
+  [`docs/VERIFICATION.md`](docs/VERIFICATION.md).
 
 ## Missing a capability?
 

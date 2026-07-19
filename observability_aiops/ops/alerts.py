@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from observability_aiops.ops._util import as_obj, prom_data, rows, s
+from observability_aiops.ops._util import as_obj, opt, prom_data, rows, s
 
 _MAX_ROWS = 500
 
@@ -26,10 +26,10 @@ def _norm_prom_alert(alert: dict) -> dict:
     annotations = as_obj(alert.get("annotations"))
     return {
         "alertname": s(labels.get("alertname")),
-        "severity": s(labels.get("severity"), 32),
+        "severity": opt(labels.get("severity"), 32),
         "state": s(alert.get("state"), 16),
         "activeAt": s(alert.get("activeAt"), 64),
-        "value": s(alert.get("value"), 64),
+        "value": opt(alert.get("value"), 64),
         "labels": {str(k): s(v, 128) for k, v in labels.items()},
         "annotations": {str(k): s(v, 300) for k, v in annotations.items()},
     }
@@ -87,7 +87,7 @@ def alertmanager_alerts(conn: Any, active_only: bool = True) -> dict:
             status = as_obj(a.get("status"))
             alerts.append({
                 "alertname": s(labels.get("alertname")),
-                "severity": s(labels.get("severity"), 32),
+                "severity": opt(labels.get("severity"), 32),
                 "fingerprint": s(a.get("fingerprint"), 64),
                 "state": s(status.get("state"), 16),
                 "startsAt": s(a.get("startsAt"), 64),
@@ -112,8 +112,8 @@ def _norm_silence(sil: dict) -> dict:
         "state": s(status.get("state"), 16),
         "startsAt": s(sil.get("startsAt"), 64),
         "endsAt": s(sil.get("endsAt"), 64),
-        "createdBy": s(sil.get("createdBy"), 128),
-        "comment": s(sil.get("comment"), 300),
+        "createdBy": opt(sil.get("createdBy"), 128),
+        "comment": opt(sil.get("comment"), 300),
         "matchers": matchers,
     }
 

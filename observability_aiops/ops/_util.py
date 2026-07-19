@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import quote
 
-from observability_aiops.governance import sanitize
+from observability_aiops.governance import opt_str, sanitize
 
 
 def _seg(value: Any) -> str:
@@ -55,6 +55,19 @@ def as_obj(data: Any) -> dict:
 def s(value: Any, limit: int = 256) -> str:
     """Sanitize an arbitrary value to a bounded, injection-safe string."""
     return sanitize(str(value if value is not None else ""), limit)
+
+
+def opt(value: Any, limit: int = 256) -> str | None:
+    """Sanitize an *optional* field, preserving absence as ``None``.
+
+    Companion to :func:`s`, which folds a missing value into ``""``. Use this
+    for any field the upstream API may legitimately omit — a Prometheus rule
+    with no ``state``, an alert with no ``severity`` label, a scrape target that
+    has never errored. ``None`` (JSON ``null``) says "the source did not return
+    this"; ``""`` says "it returned an empty value". Collapsing the two hides a
+    real difference, and a consumer tends to invent one.
+    """
+    return opt_str(value, limit)
 
 
 def num(value: Any, default: float = 0.0) -> float:

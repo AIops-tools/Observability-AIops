@@ -16,7 +16,7 @@ passes it in, so they are trivially testable with injected data.
 
 from __future__ import annotations
 
-from observability_aiops.ops._util import s
+from observability_aiops.ops._util import opt, s
 
 MAX_ROWS = 200
 
@@ -88,10 +88,10 @@ def firing_alert_rca(alerts: list[dict], rules: list[dict]) -> dict:
         entry = {
             "alertname": s(alertname),
             "severity": severity,
-            "value": s(a.get("value"), 64),
+            "value": opt(a.get("value"), 64),
             "expr": s(expr, 400),
-            "summary": s(annotations.get("summary") or annotations.get("description")),
-            "runbookUrl": s(annotations.get("runbook_url"), 256),
+            "summary": opt(annotations.get("summary") or annotations.get("description")),
+            "runbookUrl": opt(annotations.get("runbook_url"), 256),
             "_weight": _SEVERITY_WEIGHT.get(severity, 0),
         }
         entry.update(_classify_alert(alertname, expr, severity))
@@ -171,7 +171,7 @@ def target_scrape_health_analysis(targets: list[dict]) -> dict:
             "instance": s(t.get("instance")),
             "scrapeUrl": s(t.get("scrapeUrl")),
             "health": health,
-            "lastError": s(t.get("lastError")),
+            "lastError": opt(t.get("lastError")),
             "scrapeDurationSeconds": t.get("lastScrapeDurationSeconds"),
         }
         if health != "up":

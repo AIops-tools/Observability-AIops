@@ -36,13 +36,22 @@ def undo_list(limit: int = 50, target: Optional[str] = None) -> dict:
     Each entry names the original tool, the inverse tool that ``undo_apply``
     would run, and a human note. Use the ``undoId`` with ``undo_apply``.
 
+    ``truncated`` is measured (one extra row is fetched), not guessed from a
+    length coincidence — when it is true, re-run with a higher ``limit``.
+
     Args:
         limit: Max rows to return (default 50).
         target: Unused (undo state is host-local); accepted for CLI uniformity.
     """
-    rows = get_undo_store().list(status="recorded", limit=max(1, min(limit, 500)))
+    requested = max(1, min(limit, 500))
+    probed = get_undo_store().list(status="recorded", limit=requested + 1)
+    truncated = len(probed) > requested
+    rows = probed[:requested]
     return {
         "count": len(rows),
+        "returned": len(rows),
+        "limit": requested,
+        "truncated": truncated,
         "undos": [
             {
                 "undoId": r["undo_id"],

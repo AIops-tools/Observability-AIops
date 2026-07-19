@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from observability_aiops.ops._util import as_obj, num, prom_data, rows, s
+from observability_aiops.ops._util import as_obj, num, opt, prom_data, rows, s
 
 _MAX_ROWS = 500
 
@@ -27,8 +27,8 @@ def _rule(rule: dict, group: dict) -> dict:
         "file": s(group.get("file")),
         "query": s(rule.get("query"), 400),
         "health": s(rule.get("health"), 16),
-        "lastError": s(rule.get("lastError")),
-        "state": s(rule.get("state"), 16),
+        "lastError": opt(rule.get("lastError")),
+        "state": opt(rule.get("state"), 16),
         "evaluationTimeSeconds": num(rule.get("evaluationTime")),
         "labels": {str(k): s(v, 128) for k, v in as_obj(rule.get("labels")).items()},
     }

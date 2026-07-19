@@ -22,6 +22,22 @@ DryRunOption = Annotated[
 ]
 
 
+def warn_if_truncated(payload: Any, hint: str = "--limit") -> None:
+    """Print a visible notice when a result announced itself as truncated.
+
+    The payload already carries a measured ``truncated`` flag; JSON output alone
+    buries it, and a partial result read as complete is exactly the failure this
+    exists to prevent. Nothing is printed when the result is whole.
+    """
+    if not isinstance(payload, dict) or not payload.get("truncated"):
+        return
+    console.print(
+        f"[yellow]… truncated: showing {payload.get('returned', '?')} of more "
+        f"available (limit {payload.get('limit', '?')}) — re-run with a higher "
+        f"{hint} to see the rest.[/]"
+    )
+
+
 def _cli_error_types() -> tuple[type[BaseException], ...]:
     """Exceptions translated to a one-line teaching error instead of a traceback."""
     from observability_aiops.connection import ObservabilityApiError

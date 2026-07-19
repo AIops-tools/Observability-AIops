@@ -65,6 +65,9 @@ def loki_query(
         hours: Lookback window in hours (capped at the tool's max lookback).
         limit: Max log lines to return (clamped to the tool's max line limit).
         target: Loki target name from config; omit for the default.
+
+    Returns an envelope with ``returned``/``limit``/``truncated``. If
+    ``truncated`` is true the result is partial — re-run with a higher limit.
     """
     return ops.loki_query(_get_connection(target), logql, hours, limit)
 
@@ -85,6 +88,9 @@ def loki_tail_errors(
         hours: Lookback window in hours (capped at the tool's max lookback).
         limit: Max log lines to return (clamped to the tool's max line limit).
         target: Loki target name from config; omit for the default.
+
+    Returns an envelope with ``returned``/``limit``/``truncated``. If
+    ``truncated`` is true the result is partial — re-run with a higher limit.
     """
     return ops.loki_tail_errors(_get_connection(target), selector, hours, limit)
 

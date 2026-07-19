@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from observability_aiops.ops._util import _seg, as_obj, s
+from observability_aiops.ops._util import _seg, as_obj, opt, s
 
 _MAX_ROWS = 500
 
@@ -26,7 +26,7 @@ def list_dashboards(conn: Any, query: str | None = None) -> dict:
         dashboards = [{
             "uid": s(d.get("uid"), 64),
             "title": s(d.get("title")),
-            "folderTitle": s(d.get("folderTitle")),
+            "folderTitle": opt(d.get("folderTitle")),
             "tags": [s(t, 64) for t in (d.get("tags") or [])],
             "url": s(d.get("url"), 256),
         } for d in (data or []) if isinstance(d, dict)]
@@ -55,7 +55,7 @@ def get_dashboard(conn: Any, uid: str) -> dict:
         "version": dash.get("version") if isinstance(dash.get("version"), int) else None,
         "panelCount": len(panels) if isinstance(panels, list) else 0,
         "tags": [s(t, 64) for t in (dash.get("tags") or [])],
-        "folderTitle": s(meta.get("folderTitle")),
+        "folderTitle": opt(meta.get("folderTitle")),
         "isStarred": bool(meta.get("isStarred")),
     }
 
@@ -85,7 +85,7 @@ def datasource_health(conn: Any, datasource_id: int) -> dict:
     return {
         "datasourceId": int(datasource_id),
         "status": s(data.get("status"), 32),
-        "message": s(data.get("message"), 300),
+        "message": opt(data.get("message"), 300),
     }
 
 

@@ -7,7 +7,13 @@ from typing import Annotated
 
 import typer
 
-from observability_aiops.cli._common import TargetOption, cli_errors, console, get_connection
+from observability_aiops.cli._common import (
+    TargetOption,
+    cli_errors,
+    console,
+    get_connection,
+    warn_if_truncated,
+)
 
 query_app = typer.Typer(
     name="query",
@@ -26,7 +32,9 @@ def query_instant(
     from observability_aiops.ops import metrics as ops
 
     conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.instant_query(conn, promql)))
+    result = ops.instant_query(conn, promql)
+    console.print_json(json.dumps(result))
+    warn_if_truncated(result, "a narrower PromQL selector")
 
 
 @query_app.command("range")
@@ -42,7 +50,9 @@ def query_range(
     from observability_aiops.ops import metrics as ops
 
     conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.range_query(conn, promql, start, end, step)))
+    result = ops.range_query(conn, promql, start, end, step)
+    console.print_json(json.dumps(result))
+    warn_if_truncated(result, "a narrower PromQL selector")
 
 
 @query_app.command("labels")
@@ -55,4 +65,6 @@ def query_labels(
     from observability_aiops.ops import metrics as ops
 
     conn, _ = get_connection(target)
-    console.print_json(json.dumps(ops.label_values(conn, label)))
+    result = ops.label_values(conn, label)
+    console.print_json(json.dumps(result))
+    warn_if_truncated(result, "a --match selector")
