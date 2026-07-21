@@ -39,8 +39,9 @@ Every MCP tool runs through the bundled `@governed_tool` harness
 - **Token/runaway budget** — hard ceilings (`OBSERVABILITY_MAX_TOOL_CALLS` /
   `OBSERVABILITY_MAX_TOOL_SECONDS`) plus an on-by-default guard that trips a tight
   poll/retry loop, preventing unbounded API consumption.
-- **Graduated risk tiers** — `~/.observability-aiops/rules.yaml` `risk_tiers` gate
-  writes by environment/tag; the highest tiers require a recorded approver.
+- **Risk tier** — a descriptive label carried into the audit row from each
+  tool's declared `risk_level`; it does not gate the call. Whether a write is
+  permitted is the connecting account's permissions or the agent's judgement.
 - **Undo-token recording** — reversible writes capture the real fetched BEFORE
   state and record an inverse descriptor (e.g. `create_silence`→`expire_silence`,
   `update_dashboard`/`delete_dashboard`→restore the captured prior model) so the
@@ -48,9 +49,10 @@ Every MCP tool runs through the bundled `@governed_tool` harness
 
 ### State-Changing Operations
 The destructive write — `delete_dashboard` — is `risk_level=high`, accepts a
-`dry_run` preview, captures the full prior dashboard model **before** deleting,
-and (under `risk_tiers`) requires a recorded approver
-(`OBSERVABILITY_AUDIT_APPROVED_BY` + `OBSERVABILITY_AUDIT_RATIONALE`). Medium-risk
+`dry_run` preview, and captures the full prior dashboard model **before**
+deleting. `OBSERVABILITY_AUDIT_APPROVED_BY` + `OBSERVABILITY_AUDIT_RATIONALE`
+optionally annotate the audit row — the write runs whether or not they are
+set. Medium-risk
 writes (`create_silence`/`expire_silence`, `update_dashboard`,
 `reload_prometheus_config`) are audited and `dry_run`-able; silences are
 **time-boxed** (require a positive duration, no open-ended silencing).

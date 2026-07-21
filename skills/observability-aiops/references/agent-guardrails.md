@@ -13,12 +13,17 @@ harness is a guarantee. Anything below that we could move into the harness, we d
 
 | You might be tempted to prompt | Why you don't need to |
 |---|---|
-| "Work read-only, never modify anything" | Set `OBSERVABILITY_READ_ONLY=1`. Write tools (`create_silence`, `expire_silence`, `create_annotation`, `update_dashboard`, `delete_dashboard`, `reload_prometheus_config`, `undo_apply`) are then **not registered at all** — they never appear in the tool list, so the model cannot call one even if it tries. The `@governed_tool` harness independently refuses writes, so the CLI is covered too. |
 | "Don't invent a value when a field is missing" | A field the API did not return comes back as `null`, never as `""`. An alert with no `severity` label, a scrape target that has never errored, a recording rule with no alert `state`, a silence with no `comment` — all report `null`, distinguishable from a genuinely empty value. |
 | "Tell me if the output was cut off" | Bounded reads (`loki_query`, `loki_tail_errors`, `loki_labels`, `loki_label_values`, `instant_query`, `range_query`, `label_values`, `series_metadata`, `undo_list`) return `{"returned": N, "limit": L, "truncated": true/false}` alongside the rows. For the Loki reads truncation is **measured** — one line beyond the limit is requested — not guessed from a length coincidence. |
 | "Preserve the ordering / tell me what's most urgent" | The analysis tools already return worst-first: `firing_alert_rca` ranks by severity, `target_scrape_health_analysis` puts down targets before slow ones, `alert_noise_and_flap_analysis` sorts by instance count. Priority is the list order, and each entry carries the measured number it was ranked on. |
-| "Confirm before anything destructive" | Write tools take `dry_run` and the CLI adds double confirmation; high-risk operations (`delete_dashboard`) additionally require a named approver in `OBSERVABILITY_AUDIT_APPROVED_BY`. |
+| "Confirm before anything destructive" | Write tools take `dry_run` and the CLI adds double confirmation. |
 | "Log what you did" | Every call is audited to `~/.observability-aiops/audit.db` regardless of what the model says it did, and reversible writes record an undo token (`undo_list` / `undo_apply`). |
+| "Don't hammer the same call in a loop" | The runaway guard trips a circuit breaker on tight poll/retry loops — a safety backstop, not authorization. |
+
+Authorization is not this tool's job. Whether a write is allowed to happen is
+decided by the account you connect it with, or by your agent's own judgement —
+not by this harness. See "Recommended setup for a local model" below for how to
+enforce read-only at the account instead of in a prompt.
 
 ## What still needs a prompt
 
@@ -70,17 +75,22 @@ SCOPE
 
 ## Recommended setup for a local model
 
+There is no read-only switch to set — this tool does not decide whether a
+write is permitted. If you want the connection to be read-only until you trust
+the setup, enforce it at the account: give it a Grafana token with only Viewer
+scope, and a Prometheus/Alertmanager reached without the admin/write API. Any
+write attempt then fails at the server, which is the place that actually owns
+the permission.
+
 ```bash
-# Read-only until you trust the setup — this is enforced, not advisory.
-export OBSERVABILITY_READ_ONLY=1
 observability-aiops doctor
 ```
 
-Then, when you are ready to allow writes (silences, annotations, dashboards),
-unset it and set an approver so the high-risk tier has an accountable name on it:
+When you are ready to allow writes (silences, annotations, dashboards), connect
+with a token that has write scope, and optionally name yourself on the audit
+row — it is an annotation, not a gate:
 
 ```bash
-unset OBSERVABILITY_READ_ONLY
 export OBSERVABILITY_AUDIT_APPROVED_BY="your.name@example.com"
 export OBSERVABILITY_AUDIT_RATIONALE="silencing NodeDiskFilling during the 2026-07-20 disk swap"
 ```

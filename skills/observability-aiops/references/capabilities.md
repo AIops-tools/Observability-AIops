@@ -100,9 +100,9 @@ multi-tenant `X-Scope-OrgID` header is sent when the target sets `org_id`.
 | `expire_silence` | **med** | AM `DELETE /api/v2/silence/{id}` | inverse of create_silence |
 | `create_annotation` | **medium** | `POST /api/annotations` | Grafana event marker |
 | `update_dashboard` | **med** | `POST /api/dashboards/db` | GETs the prior model first → captures it for a restore undo |
-| `delete_dashboard` | **HIGH** | `DELETE /api/dashboards/uid/{uid}` | `dry_run` + approver; captures prior model **BEFORE** delete; undo → recreate |
+| `delete_dashboard` | **HIGH** | `DELETE /api/dashboards/uid/{uid}` | `dry_run`; captures prior model **BEFORE** delete; undo → recreate |
 | `reload_prometheus_config` | **med** | `POST /-/reload` | records the pre-reload config hash; no undo (re-apply the prior config file) |
-| `undo_apply` | **med** | dispatches the recorded inverse tool | executes a recorded inverse; the inverse runs through its own governed tool (its real risk tier + approver gate apply); single-use token; supports `dry_run` |
+| `undo_apply` | **med** | dispatches the recorded inverse tool | executes a recorded inverse; the inverse runs through its own governed tool (its real risk tier applies); single-use token; supports `dry_run` |
 
 **No Loki writes.** Loki exposes no safe operational write surface here (no
 silence/annotation analogue), so this tool ships Loki as read-only by design.

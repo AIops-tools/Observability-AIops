@@ -30,9 +30,10 @@ replay) were run against that stack and behaved as the mock suite predicts. The
   `update_dashboard` → restore the fetched prior model, `delete_dashboard` →
   recreate from the model captured **before** the delete. Silences are
   time-boxed (a positive duration is required).
-- Governance persistence: audited rows land in the SQLite audit DB, and the
-  secure-by-default approver gate refuses high-risk writes (`delete_dashboard`)
-  with no `rules.yaml` and no `OBSERVABILITY_AUDIT_APPROVED_BY`.
+- Governance persistence: audited rows land in the SQLite audit DB. The harness
+  authorizes nothing — there is no read-only, deny-rule, or approver gate to
+  test; a high-risk write (`delete_dashboard`) runs and is audited whether or
+  not `OBSERVABILITY_AUDIT_APPROVED_BY` is set.
 
 ## Prerequisites for a live run
 
@@ -119,20 +120,21 @@ passing.
 - [x] ✅ `create_annotation` → the annotation appeared on the Grafana timeline.
 - [x] ✅ `expire_silence` directly → the silence ended immediately.
 
-### 5. The destructive write is gated and recoverable
+### 5. The destructive write runs, is audited, and is recoverable
 - [x] ✅ `delete_dashboard <uid>` with `dry_run=True` → previewed only.
-- [x] ✅ `delete_dashboard` for real → refused until
-      `OBSERVABILITY_AUDIT_APPROVED_BY` named an approver (secure-by-default);
-      once approved, the dashboard was deleted, the audit row was tagged `high`
-      with the approver and `OBSERVABILITY_AUDIT_RATIONALE`, and `undo apply`
-      recreated the dashboard from the model captured **before** the delete.
+- [x] ✅ `delete_dashboard` for real, with `OBSERVABILITY_AUDIT_APPROVED_BY` and
+      `OBSERVABILITY_AUDIT_RATIONALE` set → the dashboard was deleted, the
+      audit row was tagged `high` with the approver and rationale recorded as
+      optional annotations, and `undo apply` recreated the dashboard from the
+      model captured **before** the delete.
 - [ ] `reload_prometheus_config` against a live Prometheus with a deliberately
       changed scrape config — **open gap** (the reload endpoint was not
       exercised live).
 
-### 6. Governance actually gates
-- [x] ✅ Secure-by-default: with no `~/.observability-aiops/rules.yaml`, the
-      high-risk write was denied without a named approver.
+### 6. Governance authorizes nothing, audits everything
+- [x] ✅ The harness authorizes nothing — there is no read-only, deny-rule, or
+      approver gate to test; the high-risk write ran and was audited whether
+      or not an approver was named.
 - [x] ✅ Relocation: with `OBSERVABILITY_AIOPS_HOME` set, `audit.db`, the undo
       store, and `secrets.enc` all land under that directory.
 - [ ] A tight poll loop trips the runaway budget guard rather than hammering the

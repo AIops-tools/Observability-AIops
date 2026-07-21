@@ -22,7 +22,7 @@ compatibility: >
   Standalone, self-governed observability operations across Prometheus (HTTP API + PromQL, default port 9090, optional bearer token), a companion Alertmanager (/api/v2, default port 9093), Grafana (HTTP API, default port 3000, required bearer token), and Grafana Loki (HTTP API, default port 3100, optional bearer or basic auth, optional multi-tenant X-Scope-OrgID). Loki is READ-ONLY: bounded LogQL reads only (labels, label values, query_range with a hard lookback + line cap and a stream-selector gate, a canned error-tail), with no write surface. Each target in the config names its own platform, so one config can span the whole stack. The governance harness (audit, policy, token/runaway budget, undo, risk-tiers) is bundled in the package — no external skill-family dependency.
   All write operations are audited to a local SQLite DB under ~/.observability-aiops/ (relocatable via OBSERVABILITY_AIOPS_HOME).
   Credentials: the Grafana service-account/API token (required) or the Prometheus bearer token (optional; self-hosted Prometheus is often unauthenticated) is stored ENCRYPTED in ~/.observability-aiops/secrets.enc (Fernet/AES-128 + scrypt-derived key) — never plaintext on disk. Run 'observability-aiops init' to onboard (it asks for the platform), or 'observability-aiops secret set <target>' to add one. The store is unlocked by a master password from OBSERVABILITY_AIOPS_MASTER_PASSWORD (non-interactive/MCP/CI) or an interactive prompt (CLI on a TTY). A legacy plaintext env var OBSERVABILITY_<TARGET_NAME_UPPER>_TOKEN is still honoured as a fallback with a deprecation warning (migrate with 'observability-aiops secret migrate'). The token is sent as an Authorization: Bearer header and held only in memory; secrets are never logged or echoed.
-  PromQL is used only through read endpoints (/api/v1/query, /query_range) — there is no write query path. State-changing operations pass through the @governed_tool decorator (pre-check + budget guard + audit + risk-tier gate). The destructive write (delete_dashboard) is high-risk with dry_run + an approver and captures the full prior dashboard model BEFORE deleting; reversible writes (update_dashboard, create_silence) capture the real fetched before-state and record an inverse undo descriptor. Silences are TIME-BOXED (create_silence requires a positive duration).
+  PromQL is used only through read endpoints (/api/v1/query, /query_range) — there is no write query path. State-changing operations pass through the @governed_tool decorator (budget guard + audit + risk-tier tagging). The destructive write (delete_dashboard) is high-risk with dry_run and captures the full prior dashboard model BEFORE deleting; reversible writes (update_dashboard, create_silence) capture the real fetched before-state and record an inverse undo descriptor. Silences are TIME-BOXED (create_silence requires a positive duration).
   Webhooks: none — no outbound network calls beyond the configured Prometheus / Alertmanager / Grafana endpoints.
   SSL: verify_ssl defaults to true; disable for self-signed lab certs.
   Transitive dependencies: httpx (HTTP client) and the MCP SDK. No post-install scripts or background services.
@@ -38,8 +38,8 @@ Governed self-hosted observability operations — **39 MCP tools** across
 **Grafana** (dashboards, datasources, folders), and **Grafana Loki** (bounded
 LogQL log reads + log RCA, read-only), every one wrapped with the bundled
 `@governed_tool` harness: a local unified audit log under
-`~/.observability-aiops/`, policy engine, token/runaway budget guard, undo-token
-recording, and graduated-autonomy risk tiers. One config can span the whole
+`~/.observability-aiops/`, token/runaway budget guard, undo-token
+recording, and descriptive risk-tier labels. One config can span the whole
 stack. Bearer tokens are stored **encrypted** (`~/.observability-aiops/secrets.enc`,
 Fernet + scrypt) — never plaintext on disk.
 
@@ -107,8 +107,8 @@ observability-aiops doctor
   `log_volume_analysis` for volume/cardinality; `alert_log_context` to pull the
   logs behind a firing alert
 - Governed writes: silence an alert (`create_silence`, time-boxed), annotate an
-  event (`create_annotation`), update/delete a dashboard (dry_run + approver for
-  delete), or hot-reload Prometheus (`reload_prometheus_config`)
+  event (`create_annotation`), update/delete a dashboard (`dry_run` first for
+  either), or hot-reload Prometheus (`reload_prometheus_config`)
 
 **Do NOT use when** the target is not a Prometheus/Grafana observability stack —
 route hypervisor, storage, backup, container-orchestrator, network-device-config,
@@ -213,29 +213,34 @@ monitoring suites (Datadog, New Relic, enterprise NMS) are out of scope.
 3. `update_dashboard` with `dry_run=True` → preview; then for real — it fetches
    and stashes the **prior model** and records a restore undo
 4. To retire one: `delete_dashboard <uid>` with `dry_run=True` first. Delete is
-   `high` risk, so with no `rules.yaml` it requires
-   `OBSERVABILITY_AUDIT_APPROVED_BY` (set `OBSERVABILITY_AUDIT_RATIONALE` too);
-   the prior model is captured **before** the delete so the undo can recreate it
+   `high` risk — the prior model is captured **before** the delete so the undo
+   can recreate it; set `OBSERVABILITY_AUDIT_APPROVED_BY` (and
+   `OBSERVABILITY_AUDIT_RATIONALE`) if you want that recorded on the audit row
 5. `create_annotation` → mark the change on the timeline so the next responder
    can correlate a metric shift with this edit
 6. **Failure branch**: wrong dashboard or a bad edit — `observability-aiops undo list`
    then `observability-aiops undo apply <id>` restores the captured prior model
-   (or recreates a deleted dashboard from it). If the write is refused outright,
-   that is the secure-by-default approver gate, not a connectivity problem —
-   check `observability-aiops doctor` only after ruling that out.
+   (or recreates a deleted dashboard from it). If the write fails outright, that
+   is the connecting account's permissions (this tool does not gate it) — check
+   the token's role before assuming `observability-aiops doctor` connectivity is
+   at fault.
 
 ## Governance & Safety
 
-- Every tool is audited to `~/.observability-aiops/audit.db` (relocatable via
-  `OBSERVABILITY_AIOPS_HOME`).
-- The high-risk op (`delete_dashboard`) can require a named approver: set
-  `OBSERVABILITY_AUDIT_APPROVED_BY` and `OBSERVABILITY_AUDIT_RATIONALE`.
-- **Secure by default (v0.2.0+)**: with no `~/.observability-aiops/rules.yaml`,
-  high/critical operations are denied unless `OBSERVABILITY_AUDIT_APPROVED_BY`
-  names an approver (set `OBSERVABILITY_AUDIT_RATIONALE` too).
-  `observability-aiops init` seeds a starter rules.yaml; an operator-authored
-  rules file is honoured as-is.
-- Every write supports `dry_run`; the destructive one adds an approver gate.
+The skill delivers reads and writes and records them; it does **not** decide whether a write is
+permitted. That is your agent's judgement, or the permission of the account you connect it with
+(give it a Grafana token with only Viewer scope, and a Prometheus/Alertmanager reached without the
+admin/write API — writes then fail at the server). There is no read-only switch, policy file, or
+approval gate.
+
+- **Audit is the guarantee, and it is not bypassable.** Every operation — MCP and CLI alike — is
+  logged to `~/.observability-aiops/audit.db` (relocatable via `OBSERVABILITY_AIOPS_HOME`): params,
+  result, status, duration, and the risk tier. The CLI writes the same row the MCP path does.
+- `OBSERVABILITY_AUDIT_APPROVED_BY` / `OBSERVABILITY_AUDIT_RATIONALE` are optional annotations
+  recorded on the audit row (who/why); they are never required and never block.
+- **Runaway guard** — a safety backstop, not authorization: the same call looped in a tight window
+  trips a circuit breaker. Disable with `OBSERVABILITY_RUNAWAY_MAX=0`.
+- Writes support `--dry-run` / `dry_run=True` and double confirmation at the CLI.
 - Silences are **time-boxed** (require a positive duration). Reversible writes
   capture the real fetched before-state and record an inverse descriptor
   (create_silence→expire, update/delete dashboard→restore/recreate).
@@ -246,4 +251,4 @@ monitoring suites (Datadog, New Relic, enterprise NMS) are out of scope.
 - `references/cli-reference.md` — CLI command reference
 - `references/setup-guide.md` — onboarding, credentials, and connectivity
 - `references/agent-guardrails.md` — running this with a smaller / local model:
-  read-only mode, what the harness enforces, and a ready-made system prompt
+  what the harness enforces for you, and a ready-made system prompt for the rest

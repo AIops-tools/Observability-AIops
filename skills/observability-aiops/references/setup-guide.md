@@ -90,8 +90,8 @@ export OBSERVABILITY_AIOPS_MASTER_PASSWORD='your-master-password'
 
 State lives under `~/.observability-aiops/` (relocate with `OBSERVABILITY_AIOPS_HOME`):
 
-- `audit.db` — every tool call (SQLite), with risk tier, approver, rationale
-- `rules.yaml` — policy: deny rules, maintenance windows, approval tiers
+- `audit.db` — every tool call (SQLite), with risk tier and any operator-supplied
+  approver/rationale (optional annotations, never required)
 - `undo.db` — inverse descriptors for reversible writes (create_silence→expire,
   update/delete dashboard→restore/recreate)
 - budget / runaway guard — caps cumulative tool calls and wall-time; trips on
@@ -99,10 +99,11 @@ State lives under `~/.observability-aiops/` (relocate with `OBSERVABILITY_AIOPS_
 
 ## Governed writes
 
-- **High-risk** op (`delete_dashboard`) requires an approver — set
-  `OBSERVABILITY_AUDIT_APPROVED_BY` and `OBSERVABILITY_AUDIT_RATIONALE` — and
-  supports `dry_run`. It captures the full prior dashboard model **before**
-  deleting so the recorded undo can recreate it.
+- **High-risk** op (`delete_dashboard`) supports `dry_run` and captures the full
+  prior dashboard model **before** deleting so the recorded undo can recreate
+  it. Optionally set `OBSERVABILITY_AUDIT_APPROVED_BY` and
+  `OBSERVABILITY_AUDIT_RATIONALE` to annotate the audit row — neither is
+  required, and the write runs either way.
 - **Reversible** writes capture the real fetched before-state:
   `update_dashboard` (restore prior model), `create_silence` (expire the created
   silence). `reload_prometheus_config` records the pre-reload config hash.

@@ -109,10 +109,19 @@ def test_undo_apply_unregistered_inverse_errors(gov_home):
     assert undo_mod.get_undo_store().get(uid)["status"] == "recorded"
 
 
+def _audited_tools(home) -> list[str]:
+    conn = sqlite3.connect(home / "audit.db")
+    try:
+        return [r[0] for r in conn.execute("SELECT tool FROM audit_log ORDER BY id")]
+    finally:
+        conn.close()
+
+
 @pytest.mark.unit
-def test_cli_undo_apply_dry_run_renders(gov_home):
-    """The `undo apply --dry-run` CLI path must render without error — guards
-    against dry_run_print signature drift across tools (api_call vs detail)."""
+def test_cli_undo_apply_dry_run_previews_and_never_mutates(gov_home):
+    """A CLI preview MAY read — it must never mutate. It routes through the
+    governed twin, so the banner reflects what the tool actually reports rather
+    than a hand-written guess (and guards against api_call/detail kwarg drift)."""
     from typer.testing import CliRunner
 
     from observability_aiops.cli import app
@@ -121,18 +130,56 @@ def test_cli_undo_apply_dry_run_renders(gov_home):
     result = CliRunner().invoke(app, ["undo", "apply", uid, "--dry-run"])
     assert result.exit_code == 0, result.output
     assert "DRY-RUN" in result.output
+    # rendered from the governed preview, not hardcoded
+    assert "_undo_probe" in result.output
+    # the sole invariant: nothing mutated
     assert _CALLS == []
     assert undo_mod.get_undo_store().get(uid)["status"] == "recorded"
+
+
+@pytest.mark.unit
+def test_cli_undo_apply_dry_run_is_audited(gov_home):
+    """The preview is a governed call, so it leaves an audit row. This is the
+    guarantee routing through the governed twin buys — a preview of a real
+    target is an event worth a trail, and the MCP path has always recorded one."""
+    from typer.testing import CliRunner
+
+    from observability_aiops.cli import app
+
+    uid = _record()
+    result = CliRunner().invoke(app, ["undo", "apply", uid, "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert "undo_apply" in _audited_tools(gov_home)
+    # audited, but the inverse itself never ran
+    assert "_undo_probe" not in _audited_tools(gov_home)
+
+
+@pytest.mark.unit
+def test_cli_undo_apply_dry_run_refusal_exits_nonzero_without_banner(gov_home):
+    """A preview of an operation that will be REFUSED must not print a green
+    banner. Rendering "here is what would happen" for a call the guard is about
+    to reject is the weak-model trap: the model reads the later refusal as
+    transient and retries. The refusal is the answer, so it exits non-zero."""
+    from typer.testing import CliRunner
+
+    from observability_aiops.cli import app
+
+    uid = _record()
+    gov.undo_apply(undo_id=uid)  # consume the single-use token
+    _CALLS.clear()
+
+    result = CliRunner().invoke(app, ["undo", "apply", uid, "--dry-run"])
+    assert result.exit_code != 0, result.output
+    assert "DRY-RUN" not in result.output
+    # collapse rich's width-based wrapping before matching the teaching message
+    assert "already 'applied'" in " ".join(result.output.split())
+    assert _CALLS == []
 
 
 @pytest.mark.unit
 def test_undo_apply_audits_both_wrapper_and_inverse(gov_home):
     uid = _record()
     gov.undo_apply(undo_id=uid)
-    conn = sqlite3.connect(gov_home / "audit.db")
-    try:
-        tools = [r[0] for r in conn.execute("SELECT tool FROM audit_log ORDER BY id")]
-    finally:
-        conn.close()
+    tools = _audited_tools(gov_home)
     assert "undo_apply" in tools
     assert "_undo_probe" in tools

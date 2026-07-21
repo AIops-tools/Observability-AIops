@@ -1,10 +1,10 @@
 """``observability-aiops init`` onboarding wizard, driven non-interactively.
 
-All on-disk state (config.yaml, secrets.enc, rules.yaml) is redirected to a tmp
-dir; the master password comes from the env var and token entry (getpass) is
-patched. Prompts are fed through the Typer runner's stdin. Covers the
-Prometheus (no-token), Grafana (required token), and Loki (basic-auth +
-multi-tenant) branches, plus the invalid-platform re-prompt.
+All on-disk state (config.yaml, secrets.enc) is redirected to a tmp dir; the
+master password comes from the env var and token entry (getpass) is patched.
+Prompts are fed through the Typer runner's stdin. Covers the Prometheus
+(no-token), Grafana (required token), and Loki (basic-auth + multi-tenant)
+branches, plus the invalid-platform re-prompt.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ def wizard_env(tmp_path, monkeypatch):
     monkeypatch.setattr(ss, "LEGACY_ENV_FILE", cfg_dir / ".env")
     monkeypatch.setattr(ss, "_cached", None)
     monkeypatch.setenv("OBSERVABILITY_AIOPS_MASTER_PASSWORD", "master-pw")
-    monkeypatch.setenv("OBSERVABILITY_AIOPS_HOME", str(cfg_dir))  # rules.yaml lands here
+    monkeypatch.setenv("OBSERVABILITY_AIOPS_HOME", str(cfg_dir))
     return cfg_dir
 
 
@@ -51,8 +51,6 @@ def test_init_prometheus_no_token(wizard_env, monkeypatch):
     assert targets[0]["name"] == "prod-prom"
     assert targets[0]["platform"] == "prometheus"
     assert targets[0]["port"] == 9090
-    # starter policy rules were seeded
-    assert (wizard_env / "rules.yaml").exists()
 
 
 @pytest.mark.unit

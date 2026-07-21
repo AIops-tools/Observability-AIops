@@ -7,8 +7,8 @@ descriptor from the REAL captured before-state:
   * ``update_dashboard`` / ``delete_dashboard`` → restore/recreate the dashboard
     from the model captured before the change.
 
-``delete_dashboard`` is risk=high with a ``dry_run`` preview and requires an
-approver under the graduated-autonomy policy. Every write supports ``dry_run``.
+``delete_dashboard`` is risk=high with a ``dry_run`` preview, carrying that risk
+tier into the audit row. Every write supports ``dry_run``.
 """
 
 from typing import Any, Optional
@@ -162,9 +162,10 @@ def update_dashboard(
 def delete_dashboard(uid: str, dry_run: bool = False, target: Optional[str] = None) -> dict:
     """[WRITE][risk=high] Delete a Grafana dashboard. Captures the prior model BEFORE delete.
 
-    Pass dry_run=True to preview (reports the dashboard title). Requires an
-    approver (OBSERVABILITY_AUDIT_APPROVED_BY) under the graduated-autonomy
-    policy. The prior model is captured so the recorded undo can recreate it.
+    Pass dry_run=True to preview (reports the dashboard title). Optionally set
+    an approver (OBSERVABILITY_AUDIT_APPROVED_BY) to annotate the audit row —
+    it is not required. The prior model is captured so the recorded undo can
+    recreate it.
 
     Args:
         uid: Dashboard UID to delete (from list_dashboards).

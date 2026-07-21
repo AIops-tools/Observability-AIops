@@ -117,7 +117,7 @@ mcp = FastMCP(
         "alert-noise/flap); and governed writes — create/expire silence, create "
         "annotation, update/delete dashboard, reload Prometheus config. Loki is "
         "read-only (no safe write surface). Destructive writes (delete dashboard) "
-        "are risk=high with a dry_run preview and require an approver. Reversible "
+        "are risk=high with a dry_run preview. Reversible "
         "writes capture the real before-state and record an undo. Every tool runs "
         "through the observability-aiops governance harness (audit / budget / "
         "risk-tier / undo)."

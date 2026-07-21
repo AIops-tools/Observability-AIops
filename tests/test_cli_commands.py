@@ -134,3 +134,23 @@ def test_cli_errors_annotates_keyerror(monkeypatch):
     result = runner.invoke(app, ["query", "instant", "up"])
     assert result.exit_code == 1
     assert "Missing required key" in result.stdout
+
+
+# ── refusals must teach, not traceback ────────────────────────────────────────
+#
+# ``PolicyDenied``/``BudgetExceeded`` are raised by ``@governed_tool`` OUTSIDE the
+# tool body, so ``tool_errors`` never flattens them into ``{"error": ...}`` and
+# ``dry_run_preview``'s dict check cannot see them. Before they were listed in
+# ``_cli_error_types`` a refused preview reached the operator as a raw traceback:
+# the teaching text was in there, buried under a stack dump. A weak model reads
+# that as a crash and retries — the very loop the preview reroute exists to stop.
+
+
+def test_cli_error_types_covers_governance_refusals() -> None:
+    """A governance refusal must be translated, not dumped as a traceback."""
+    from observability_aiops.cli._common import _cli_error_types
+    from observability_aiops.governance import BudgetExceeded, PolicyDenied
+
+    types = _cli_error_types()
+    assert PolicyDenied in types
+    assert BudgetExceeded in types

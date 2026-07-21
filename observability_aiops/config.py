@@ -27,7 +27,12 @@ from pathlib import Path
 import yaml
 
 from observability_aiops.governance.paths import ops_home
-from observability_aiops.secretstore import SecretStoreError, get_secret, has_store
+from observability_aiops.secretstore import (
+    MasterPasswordError,
+    SecretStoreError,
+    get_secret,
+    has_store,
+)
 
 CONFIG_DIR = ops_home()
 CONFIG_FILE = CONFIG_DIR / "config.yaml"
@@ -72,8 +77,15 @@ def _resolve_secret(name: str, *, required: bool) -> str:
     if has_store():
         try:
             return get_secret(name)
+        except MasterPasswordError:
+            # A wrong or missing master password is NOT "this target has no
+            # secret". Falling through resurfaced it as "No API key for target
+            # X", sending the operator to add a credential that is already
+            # there. MasterPasswordError subclasses SecretStoreError, so the
+            # broad catch below would swallow it — re-raise first.
+            raise
         except SecretStoreError:
-            pass  # fall through to legacy env var
+            pass  # no secret stored for this target — try the legacy env var
     legacy = os.environ.get(_secret_env_key(name))
     if legacy:
         _log.warning(

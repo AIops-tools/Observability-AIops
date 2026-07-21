@@ -8,8 +8,8 @@ Governed AI-ops for a **self-hosted observability stack** in one server —
 **Prometheus** (HTTP API, PromQL, targets, rules, alerts), **Alertmanager**
 (alerts + silences), **Grafana** (dashboards, datasources, folders), and
 **Grafana Loki** (bounded LogQL log reads + log RCA) — with a **built-in
-governance harness**: unified audit log, policy engine, token/runaway budget
-guard, undo-token recording, and graduated-autonomy risk tiers. One config can
+governance harness**: unified audit log, token/runaway budget
+guard, undo-token recording, and descriptive risk-tier labels. One config can
 span your whole stack; each target names its own `platform`.
 Beyond the mock test suite, the Prometheus/Alertmanager/Grafana reads, the RCAs,
 and the governed silence + dashboard write paths (with undo) have been exercised against a live Prometheus 3.x + Alertmanager + Grafana 13 stack — see
@@ -50,45 +50,22 @@ and guards the writes that follow:
   config — each audited, risk-tiered, `dry_run`-able, and the reversible ones
   capture the **real fetched before-state** for undo.
 
-## Security: read-only mode
+## What this tool does, and does not, decide
 
-This tool is meant to be handed to an AI agent, so its safety story is enforced
-by the server rather than requested in a prompt:
+It delivers Prometheus + Grafana operations — reads and writes — accurately and
+efficiently, and records every one of them. It does **not** decide whether a write is allowed to
+happen. That is the agent's judgement, or the permission of the account you connect it with: give
+it a Grafana token with only Viewer scope, and a Prometheus/Alertmanager reached without the
+admin/write API, and the writes fail at the server — the place that actually owns the permission.
 
-```bash
-export OBSERVABILITY_READ_ONLY=1
-```
+So there is no read-only switch, no policy file, no approval gate to configure. The one thing the
+tool guarantees is that nothing is silent: **every call, over MCP and over the CLI alike, lands
+an audit row** in `~/.observability-aiops/audit.db`, and destructive writes still capture their
+before-state and record an inverse where one exists.
 
-With that set, the **7 write tools are never registered**. An MCP client
-lists **32 tools instead of 39** — the writes are not hidden, not
-gated behind a flag, and not merely refused when called. They are absent from
-the session. A model cannot invoke a tool it was never offered, and cannot be
-argued into one.
-
-That distinction is the whole point. A tool that exists but refuses still invites
-retry loops and "I'll describe the call instead" behaviour from smaller models,
-and it leaves a reviewer trusting a promise. An absent tool is a fact you can
-check: connect, list the tools, and see that the writes are not there.
-
-Enforcement is two layers deep, so the switch cannot be sidestepped by changing
-entry point:
-
-| Layer | What it does | Covers |
-|---|---|---|
-| `@governed_tool` harness | refuses every non-read operation outright | MCP, CLI, and in-process callers |
-| MCP registration | write tools are removed from `list_tools()` | anything speaking MCP |
-
-Read operations are unaffected, and every call is still audited to
-`~/.observability-aiops/audit.db`.
-
-> The read/write split is derived from each tool's declared `risk_level`, and a
-> test asserts that this never disagrees with the `[READ]`/`[WRITE]` tag in the
-> tool's own documentation — so a write can't quietly present itself as a read.
-
-Running a smaller / local model? See
-[agent-guardrails.md](skills/observability-aiops/references/agent-guardrails.md) — it lists
-the guardrails this tool now enforces for you (so you don't spend prompt budget
-restating them) and gives a ready-made system prompt for what's left.
+> Each tool declares a `risk_level`, carried into the audit row as a descriptive tier
+> (none/confirm/review) — so a reviewer can see at a glance that a row was a high-risk delete. It
+> is a label, not a gate.
 
 ## Capability matrix (39 MCP tools)
 
@@ -142,17 +119,18 @@ observability-aiops mcp
 
 Every MCP tool passes through the bundled `@governed_tool` harness:
 
-- **Audit** — every call (params, result, status, duration, risk tier, approver,
-  rationale) is logged to `~/.observability-aiops/audit.db` (relocatable via
-  `OBSERVABILITY_AIOPS_HOME`).
-- **Budget / runaway guard** — token and call budgets trip a circuit breaker on
-  tight poll/retry loops.
-- **Risk tiers** — graduated autonomy; high-risk ops (`delete_dashboard`) can
-  require a named approver (`OBSERVABILITY_AUDIT_APPROVED_BY` /
-  `OBSERVABILITY_AUDIT_RATIONALE`).
-- **Undo recording** — reversible writes capture the real before-state and record
-  an inverse descriptor (`create_silence`→expire, `update_dashboard`/
-  `delete_dashboard`→restore the captured prior model).
+- **Audit** — every call (params, result, status, duration, risk tier, and any operator-supplied
+  approver/rationale) is logged to `~/.observability-aiops/audit.db` (relocatable via
+  `OBSERVABILITY_AIOPS_HOME`). The CLI writes the same row the MCP path does — there is no
+  unaudited entry point.
+- **Runaway guard** — a safety backstop, not an authorization gate: the same call hammered in a
+  tight loop trips a circuit breaker. Disable with `OBSERVABILITY_RUNAWAY_MAX=0`; optional hard
+  ceilings via `OBSERVABILITY_MAX_TOOL_CALLS` / `OBSERVABILITY_MAX_TOOL_SECONDS`.
+- **Undo recording** — reversible writes record an inverse descriptor built from the fetched
+  before-state (`create_silence`→expire, `update_dashboard`/`delete_dashboard`→restore the
+  captured prior model).
+- **Risk tier** — a descriptive label on the audit row derived from `risk_level`; it gates
+  nothing.
 
 ## Supported scope & limitations
 
