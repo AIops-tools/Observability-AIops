@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.8.0 — 2026-08-03
 
 ### Fixed
 - **The error-burst RCA could not see a large burst.** Per-stream error counts were the row count of a `query_range` bounded at 100 lines, so every busy stream reported exactly 100 and the current-vs-baseline comparison collapsed. A service going from 25 to 485 errors read as 100 → 100 — **no burst** — and so did a service that had been noisy all along, meaning the analysis failed precisely when the incident was big. Counts now come from Loki's own `count_over_time`, evaluated server-side and exact at any volume; the bounded line query is used only for sample lines, and a stream crowded out of it is still reported with its real count and no samples. Verified against a live Loki 3.0.0: the same seeded 19x spike scores `burstCount: 0` before the fix and `volume_spike` after.
