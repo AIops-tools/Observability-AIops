@@ -30,21 +30,35 @@ def _streams(*entries):
     return {"status": "success", "data": {"resultType": "streams", "result": result}}
 
 
+def _counts(*entries):
+    """Build a Loki instant-vector payload from (labels, count) entries.
+
+    Each burst-RCA window now issues TWO reads: ``count_over_time`` for the exact
+    per-stream count, then a bounded line query only for sample lines. Counting
+    the rows of the bounded query saturated at the line limit and hid every
+    large burst.
+    """
+    result = [{"metric": labels, "value": [1700000000, str(count)]}
+              for labels, count in entries]
+    return {"status": "success", "data": {"resultType": "vector", "result": result}}
+
+
 @pytest.mark.unit
 def test_log_error_burst_rca_runs_current_vs_baseline(monkeypatch):
-    # First call (current window) bursts; second call (baseline) is quiet.
-    current = _streams(({"app": "api"}, 30))
-    baseline = _streams(({"app": "api"}, 1))
+    # Current window bursts; baseline is quiet. Each window: counts, then lines.
     conn = MagicMock(name="loki")
     conn.target.platform = "loki"
-    conn.loki_get.side_effect = [current, baseline]
+    conn.loki_get.side_effect = [
+        _counts(({"app": "api"}, 30)), _streams(({"app": "api"}, 30)),
+        _counts(({"app": "api"}, 1)), _streams(({"app": "api"}, 1)),
+    ]
     monkeypatch.setattr(t, "_get_connection", lambda target=None: conn)
 
     out = t.log_error_burst_rca('{app="api"}', hours=1.0)
     assert out["burstCount"] == 1
     assert out["bursts"][0]["app"] == "api"
-    # two Loki reads: current window then baseline window
-    assert conn.loki_get.call_count == 2
+    # two windows x (exact count + bounded sample lines)
+    assert conn.loki_get.call_count == 4
 
 
 @pytest.mark.unit

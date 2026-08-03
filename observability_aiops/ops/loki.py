@@ -194,18 +194,63 @@ def _validate_window(start_ns: int, end_ns: int) -> float:
     return _validate_hours(span_hours)
 
 
+def _labels_key(labels: dict) -> tuple:
+    """A hashable, order-independent identity for a stream's label set."""
+    return tuple(sorted((str(k), str(v)) for k, v in (labels or {}).items()))
+
+
+def error_counts_window(conn: Any, logql: str, start_ns: int, end_ns: int) -> list[dict]:
+    """EXACT per-stream error counts for a window, counted by Loki itself.
+
+    ``count_over_time`` is evaluated server-side, so the number is the real one
+    no matter how many lines the stream produced. Counting the rows of a bounded
+    ``query_range`` instead — which is what this used to do — saturates at the
+    line limit, and a saturated count is not merely imprecise: it silently
+    changes the burst verdict. With a 100-line cap a service going from 40
+    errors to 300 reads as 100 → 100, i.e. **no burst at all**, and so does a
+    service that was noisy all along. The one call the RCA exists to make fails
+    exactly when the incident is large. Measured on a live Loki 3.0.0.
+    """
+    seconds = max(1, int((end_ns - start_ns) / _NS_PER_SEC))
+    params = {"query": f"count_over_time({logql}[{seconds}s])", "time": str(end_ns)}
+    data = prom_data(conn.loki_get("/loki/api/v1/query", params))
+    result = data.get("result", []) if isinstance(data, dict) else []
+    out: list[dict] = []
+    for item in result[:MAX_STREAMS]:
+        if not isinstance(item, dict):
+            continue
+        labels = {str(k): s(v, 128) for k, v in (item.get("metric") or {}).items()}
+        value = item.get("value")
+        raw = value[1] if isinstance(value, (list, tuple)) and len(value) >= 2 else 0
+        out.append({"labels": labels, "count": int(num(raw))})
+    return out
+
+
 def error_streams_window(
     conn: Any, selector: str, start_ns: int, end_ns: int, limit: int = DEFAULT_LINE_LIMIT
 ) -> list[dict]:
     """Summarised error streams for an explicit window (may raise; used by the RCA).
 
-    Both the current and the baseline window of ``log_error_burst_rca`` flow
-    through here, so each is independently bounded by the same gate.
+    Counts come from Loki's own ``count_over_time`` (exact at any volume); the
+    bounded line query is used only to attach illustrative sample lines. A stream
+    the line query never reached — because a busier one filled the budget — is
+    still reported, with its real count and no samples.
     """
     q = validate_logql(error_query(selector))
     _validate_window(start_ns, end_ns)
-    data = _query_range_raw(conn, q, start_ns, end_ns, limit)
-    return summarize_streams(data)
+    counted = error_counts_window(conn, q, start_ns, end_ns)
+    samples = {
+        _labels_key(st.get("labels") or {}): st.get("sampleLines") or []
+        for st in summarize_streams(_query_range_raw(conn, q, start_ns, end_ns, limit))
+    }
+    return [
+        {
+            "labels": st["labels"],
+            "count": st["count"],
+            "sampleLines": samples.get(_labels_key(st["labels"]), []),
+        }
+        for st in counted
+    ]
 
 
 def _query_range_raw(

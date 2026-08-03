@@ -300,3 +300,63 @@ def test_doctor_loki_healthy(monkeypatch, tmp_path):
 def test_doctor_loki_broken(monkeypatch, tmp_path):
     doc = _patch_doctor(monkeypatch, tmp_path, ok=False)
     assert doc.run_doctor() == 1
+
+
+# ── burst counts come from Loki, not from counting capped lines ──────────────
+
+
+@pytest.mark.unit
+def test_error_streams_window_counts_beyond_the_line_limit():
+    """Per-stream error counts must be exact at any volume.
+
+    They used to be ``len(values)`` of a ``query_range`` bounded at 100 lines,
+    so every busy stream reported exactly 100 and the burst comparison collapsed:
+    a service going 25 → 485 errors read as 100 → 100, i.e. **no burst**, and so
+    did a service that had been noisy all along. Verified against a live Loki
+    3.0.0 — the same seeded 19x spike scores burstCount 0 before this fix and
+    volume_spike after.
+    """
+    labels = {"app": "checkout", "level": "error"}
+    counted = {"status": "success",
+               "data": {"resultType": "vector",
+                        "result": [{"metric": labels, "value": [1, "4821"]}]}}
+    lines = {"status": "success",
+             "data": {"resultType": "streams",
+                      "result": [{"stream": labels,
+                                  "values": [[str(i), f"boom {i}"] for i in range(100)]}]}}
+    conn = MagicMock(name="conn")
+    conn.target.platform = "loki"
+    conn.loki_get.side_effect = [counted, lines]
+
+    now = ops._now_ns()
+    out = ops.error_streams_window(conn, '{app="checkout"}', now - 3600 * ops._NS_PER_SEC, now)
+
+    assert out[0]["count"] == 4821  # not 100
+    assert out[0]["sampleLines"]  # samples still attached from the line query
+    counting_query = conn.loki_get.call_args_list[0][0][1]["query"]
+    assert counting_query.startswith("count_over_time(")
+
+
+@pytest.mark.unit
+def test_error_streams_window_reports_a_stream_the_line_query_never_reached():
+    """A stream crowded out of the bounded line query still gets its real count."""
+    busy = {"app": "checkout", "level": "error"}
+    quiet = {"app": "catalog", "level": "error"}
+    counted = {"status": "success",
+               "data": {"resultType": "vector",
+                        "result": [{"metric": busy, "value": [1, "9000"]},
+                                   {"metric": quiet, "value": [1, "7"]}]}}
+    lines = {"status": "success",
+             "data": {"resultType": "streams",
+                      "result": [{"stream": busy,
+                                  "values": [[str(i), "boom"] for i in range(100)]}]}}
+    conn = MagicMock(name="conn")
+    conn.target.platform = "loki"
+    conn.loki_get.side_effect = [counted, lines]
+
+    now = ops._now_ns()
+    out = ops.error_streams_window(conn, '{env="prod"}', now - 3600 * ops._NS_PER_SEC, now)
+
+    by_app = {st["labels"]["app"]: st for st in out}
+    assert by_app["catalog"]["count"] == 7
+    assert by_app["catalog"]["sampleLines"] == []  # honest: counted, never sampled

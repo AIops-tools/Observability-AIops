@@ -11,7 +11,39 @@ checklist-shaped so the result is reproducible and auditable — not a subjectiv
 the three metric RCAs, the silence and dashboard governed writes, and undo
 replay) were run against that stack and behaved as the mock suite predicts. The
 **Grafana Loki** surface — bounded LogQL reads and the two log analyses — has
-**not** been exercised live and is mock-only so far.
+**not** been exercised live and is mock-only so far. **That gap was closed on
+2026-08-03 — see the section below, which found a real bug.**
+
+## 🔴 Loki, against a real Loki 3.0.0 (2026-08-03): the burst RCA was blind to big bursts
+
+The log surface was the last mock-only part of this tool. Standing up a real
+Loki and seeding it with a deliberate fault — one app whose errors jump far above
+its own baseline — found that the flagship log analysis fails on exactly the
+incidents it exists for.
+
+Per-stream error counts were `len(values)` of a `query_range` **bounded at 100
+lines**. Above that they saturate, so both windows of the current-vs-baseline
+comparison report 100 and no burst is possible. Two seeded apps made it concrete:
+
+| app | baseline | current | truth | reported before |
+|---|---|---|---|---|
+| `noisy` | 500 | 500 | not a burst | 100 → 100, not a burst ✓ (by luck) |
+| `spiking` | 25 | 485 | **19x burst** | 100 → 100, **no burst** ✗ |
+
+`burstCount: 0` on live data containing a 19x error spike. 100 error lines is a
+threshold any service in trouble crosses in seconds, so the failure mode is
+"works in the lab, silent during the outage".
+
+Counts now come from Loki's own `count_over_time`, evaluated server-side and
+exact at any volume; the bounded line query is kept only for the illustrative
+`sampleLines`, and a stream crowded out of that budget is still reported with its
+real count and an empty sample list rather than vanishing. Same data after the
+fix: `spiking` → `volume_spike` (485 vs 25), `noisy` correctly not flagged.
+
+Also checked and correct on real data: `logs labels`, `logs query`, the canned
+`logs errors` tail (its truncation envelope self-reports `truncated: true` with a
+human "showing 100 of more available" line), and `log_volume_analysis`'s
+high-cardinality ranking against 25 seeded per-pod streams.
 
 ## What the mock suite already guarantees
 
