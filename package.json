@@ -1,6 +1,6 @@
 {
   "name": "@aiops-tools/observability-aiops",
-  "version": "0.10.3",
+  "version": "0.10.4",
   "description": "Governed Prometheus + Grafana ops: PromQL, alerts, dashboards, RCA; 39 tools.",
   "private": true,
   "license": "MIT",
