@@ -1,0 +1,24 @@
+{
+  "id": "observability-aiops",
+  "name": "Observability AIops",
+  "description": "Governed Prometheus + Grafana ops: PromQL, alerts, dashboards, RCA; 39 tools.",
+  "skills": [
+    "./skills"
+  ],
+  "mcpServers": {
+    "observability-aiops": {
+      "transport": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "observability-aiops==0.10.0",
+        "observability-aiops-mcp"
+      ]
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}
