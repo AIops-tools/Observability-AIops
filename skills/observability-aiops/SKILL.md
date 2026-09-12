@@ -93,6 +93,8 @@ openclaw plugins install clawhub:@aiops-tools/observability-aiops
 openclaw skills info observability-aiops          # expect: Visible to model: yes
 ```
 
+Needs `uvx` on `PATH`: the MCP server is fetched with uv, pinned to this release.
+
 ## When to Use This Skill
 
 - Get a snapshot (`overview` / `observability_overview`): firing-alert count,
