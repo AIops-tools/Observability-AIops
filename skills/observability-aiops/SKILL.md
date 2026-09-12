@@ -86,6 +86,13 @@ observability-aiops init       # wizard: pick platform (prometheus/grafana) + en
 observability-aiops doctor
 ```
 
+Or as an OpenClaw plugin, which installs this skill and its MCP server together:
+
+```bash
+openclaw plugins install clawhub:@aiops-tools/observability-aiops
+openclaw skills info observability-aiops          # expect: Visible to model: yes
+```
+
 ## When to Use This Skill
 
 - Get a snapshot (`overview` / `observability_overview`): firing-alert count,
