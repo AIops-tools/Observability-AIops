@@ -499,7 +499,7 @@ wheels = [
 
 [[package]]
 name = "observability-aiops"
-version = "0.10.2"
+version = "0.10.3"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },

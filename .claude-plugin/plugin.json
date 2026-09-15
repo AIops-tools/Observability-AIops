@@ -2,7 +2,7 @@
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "observability-aiops",
   "displayName": "Observability AIops",
-  "version": "0.10.2",
+  "version": "0.10.3",
   "description": "Governed Prometheus + Grafana ops: PromQL, alerts, dashboards, RCA; 39 tools.",
   "author": {
     "name": "Wei Zhou",
