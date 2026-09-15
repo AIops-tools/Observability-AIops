@@ -6,7 +6,13 @@ import json
 
 import typer
 
-from observability_aiops.cli._common import TargetOption, cli_errors, console, get_connection
+from observability_aiops.cli._common import (
+    TargetOption,
+    audited,
+    cli_errors,
+    console,
+    get_connection,
+)
 
 alert_app = typer.Typer(
     name="alert",
@@ -17,6 +23,7 @@ alert_app = typer.Typer(
 
 @alert_app.command("firing")
 @cli_errors
+@audited
 def alert_firing(target: TargetOption = None) -> None:
     """List currently firing Prometheus rule alerts, grouped by severity."""
     from observability_aiops.ops import alerts as ops
@@ -27,6 +34,7 @@ def alert_firing(target: TargetOption = None) -> None:
 
 @alert_app.command("silences")
 @cli_errors
+@audited
 def alert_silences(target: TargetOption = None) -> None:
     """List Alertmanager silences (active, pending, expired)."""
     from observability_aiops.ops import alerts as ops
@@ -37,6 +45,7 @@ def alert_silences(target: TargetOption = None) -> None:
 
 @alert_app.command("rca")
 @cli_errors
+@audited
 def alert_rca(target: TargetOption = None) -> None:
     """Root-cause firing alerts: join each to its rule expr → cause + action."""
     from observability_aiops.ops import alerts as alerts_ops

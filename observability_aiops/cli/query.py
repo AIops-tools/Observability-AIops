@@ -9,6 +9,7 @@ import typer
 
 from observability_aiops.cli._common import (
     TargetOption,
+    audited,
     cli_errors,
     console,
     get_connection,
@@ -24,6 +25,7 @@ query_app = typer.Typer(
 
 @query_app.command("instant")
 @cli_errors
+@audited
 def query_instant(
     promql: Annotated[str, typer.Argument(help="A PromQL expression (e.g. 'up')")],
     target: TargetOption = None,
@@ -39,6 +41,7 @@ def query_instant(
 
 @query_app.command("range")
 @cli_errors
+@audited
 def query_range(
     promql: Annotated[str, typer.Argument(help="A PromQL expression")],
     start: Annotated[str, typer.Option("--start", help="Range start (RFC-3339/unix)")],
@@ -57,6 +60,7 @@ def query_range(
 
 @query_app.command("labels")
 @cli_errors
+@audited
 def query_labels(
     label: Annotated[str, typer.Argument(help="Label name (default __name__)")] = "__name__",
     target: TargetOption = None,

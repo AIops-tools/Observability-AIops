@@ -9,6 +9,7 @@ import typer
 
 from observability_aiops.cli._common import (
     TargetOption,
+    audited,
     cli_errors,
     console,
     get_connection,
@@ -24,6 +25,7 @@ logs_app = typer.Typer(
 
 @logs_app.command("labels")
 @cli_errors
+@audited
 def logs_labels(
     hours: Annotated[float, typer.Option("--hours", help="Lookback window (hours)")] = 1.0,
     target: TargetOption = None,
@@ -37,6 +39,7 @@ def logs_labels(
 
 @logs_app.command("query")
 @cli_errors
+@audited
 def logs_query(
     logql: Annotated[str, typer.Argument(help="LogQL with a stream selector, e.g. {app=\"api\"}")],
     hours: Annotated[float, typer.Option("--hours", help="Lookback window (hours)")] = 1.0,
@@ -54,6 +57,7 @@ def logs_query(
 
 @logs_app.command("errors")
 @cli_errors
+@audited
 def logs_errors(
     selector: Annotated[str, typer.Argument(help="Stream selector, e.g. '{app=\"api\"}'")],
     hours: Annotated[float, typer.Option("--hours", help="Lookback window (hours)")] = 1.0,
