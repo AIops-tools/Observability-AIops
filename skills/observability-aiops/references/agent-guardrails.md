@@ -16,7 +16,7 @@ harness is a guarantee. Anything below that we could move into the harness, we d
 | "Don't invent a value when a field is missing" | A field the API did not return comes back as `null`, never as `""`. An alert with no `severity` label, a scrape target that has never errored, a recording rule with no alert `state`, a silence with no `comment` — all report `null`, distinguishable from a genuinely empty value. |
 | "Tell me if the output was cut off" | Bounded reads (`loki_query`, `loki_tail_errors`, `loki_labels`, `loki_label_values`, `instant_query`, `range_query`, `label_values`, `series_metadata`, `undo_list`) return `{"returned": N, "limit": L, "truncated": true/false}` alongside the rows. For the Loki reads truncation is **measured** — one line beyond the limit is requested — not guessed from a length coincidence. |
 | "Preserve the ordering / tell me what's most urgent" | The analysis tools already return worst-first: `firing_alert_rca` ranks by severity, `target_scrape_health_analysis` puts down targets before slow ones, `alert_noise_and_flap_analysis` sorts by instance count. Priority is the list order, and each entry carries the measured number it was ranked on. |
-| "Confirm before anything destructive" | Write tools take `dry_run` and the CLI adds double confirmation. |
+| "Confirm before anything destructive" | Every write tool takes `dry_run` for a preview, and `delete_dashboard` is `risk=high`. ⚠️ **Apart from `undo apply`, no write tool here has a CLI command**, so the CLI double confirmation never applies to one: they are reachable only over MCP, where nothing prompts. Keep your own confirmation for them. |
 | "Log what you did" | Every call is audited to `~/.observability-aiops/audit.db` regardless of what the model says it did, and reversible writes record an undo token (`undo_list` / `undo_apply`). |
 | "Don't hammer the same call in a loop" | The runaway guard trips a circuit breaker on tight poll/retry loops — a safety backstop, not authorization. |
 
@@ -61,6 +61,11 @@ QUERIES
 - Use label_values / loki_labels / loki_label_values to discover real label
   names and values before writing a selector. Do not guess a job, instance, or
   app name.
+
+- Apart from `undo apply`, no write tool here has a CLI command, so nothing will ask you
+  to confirm one —
+  `delete_dashboard` included. Call with `dry_run=True` first, show the operator what would
+  change, and wait for an explicit go-ahead.
 
 SCOPE
 - Separate observation from interpretation. State what the tools returned, then

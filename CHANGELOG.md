@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- The "confirm before anything destructive" row said the CLI adds a double confirmation to
+  the write tools. Apart from `undo apply` none of them has a CLI command, `delete_dashboard`
+  included, so they are reachable only over MCP where there is no confirmation step — and
+  the row sat in the table headed "do not waste prompt budget on these". Corrected, and the
+  copyable system prompt now asks the model to confirm them itself.
+
 ## v0.10.3 — 2026-09-15
 
 ### Fixed
