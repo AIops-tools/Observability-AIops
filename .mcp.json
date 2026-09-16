@@ -5,7 +5,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "observability-aiops==0.10.3",
+        "observability-aiops==0.10.4",
         "observability-aiops-mcp"
       ]
     }
