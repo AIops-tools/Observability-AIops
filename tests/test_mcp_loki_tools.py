@@ -57,8 +57,11 @@ def test_log_error_burst_rca_runs_current_vs_baseline(monkeypatch):
     out = t.log_error_burst_rca('{app="api"}', hours=1.0)
     assert out["burstCount"] == 1
     assert out["bursts"][0]["app"] == "api"
-    # two windows x (exact count + bounded sample lines)
+    # two windows x (exact count + bounded sample lines); a non-empty baseline
+    # is its own evidence, so no volume probe is issued.
     assert conn.loki_get.call_count == 4
+    assert out["baselineProbeError"] is None
+    assert out["baselineReadable"] is True
 
 
 @pytest.mark.unit
@@ -128,3 +131,41 @@ def test_loki_tools_all_governed_low():
                t.log_error_burst_rca, t.log_volume_analysis, t.alert_log_context):
         assert fn._risk_level == "low"
         assert getattr(fn, "_is_governed_tool", False)
+
+
+def _volume(total):
+    sample = {"metric": {}, "value": [1700000000, str(total)]}
+    return {"status": "success", "data": {"resultType": "vector", "result": [sample]}}
+
+
+@pytest.mark.unit
+def test_empty_baseline_probes_total_log_volume(monkeypatch):
+    conn = MagicMock(name="loki")
+    conn.target.platform = "loki"
+    conn.loki_get.side_effect = [
+        _counts(({"app": "api"}, 30)), _streams(({"app": "api"}, 30)),
+        _counts(), _streams(),
+        _volume(0),
+    ]
+    monkeypatch.setattr(t, "_get_connection", lambda target=None: conn)
+    out = t.log_error_burst_rca('{app="api"}', hours=1.0)
+    probe = conn.loki_get.call_args_list[4].args[1]["query"]
+    assert probe.startswith("sum(count_over_time({app=\"api\"}[")
+    assert out["bursts"][0]["classification"] == "no_baseline"
+    assert out["baselineLogLines"] == 0
+
+
+@pytest.mark.unit
+def test_failed_volume_probe_is_reported_and_treated_as_unknown(monkeypatch):
+    conn = MagicMock(name="loki")
+    conn.target.platform = "loki"
+    conn.loki_get.side_effect = [
+        _counts(({"app": "api"}, 30)), _streams(({"app": "api"}, 30)),
+        _counts(), _streams(),
+        RuntimeError("502 bad gateway"),
+    ]
+    monkeypatch.setattr(t, "_get_connection", lambda target=None: conn)
+    out = t.log_error_burst_rca('{app="api"}', hours=1.0)
+    assert out["bursts"][0]["classification"] == "no_baseline"
+    assert out["baselineLogLines"] is None
+    assert "502" in out["baselineProbeError"]

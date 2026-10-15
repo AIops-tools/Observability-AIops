@@ -82,7 +82,7 @@ multi-tenant `X-Scope-OrgID` header is sent when the target sets `org_id`.
 
 | Tool | Inputs | Returns |
 |------|--------|---------|
-| `log_error_burst_rca` | selector + window (pulls current + baseline error streams) | per-stream error counts vs a baseline window; each burst classified **new_signature** (baseline 0), **volume_spike** (>= `burst_ratio`×baseline), or **single_instance** (localized to one pod/instance) with a cause + action + sample lines |
+| `log_error_burst_rca` | selector + window (pulls current + baseline error streams) | per-stream error counts vs a baseline window; each burst classified **new_signature** (baseline 0), **volume_spike** (>= `burst_ratio`×baseline), or **single_instance** (localized to one pod/instance), or **no_baseline** (the baseline window had no logs at all — measured with a total-volume probe — so "new" cannot be told from "always there"; `baselineReadable`, `baselineLogLines`) with a cause + action + sample lines |
 | `log_volume_analysis` | selector + window (pulls streams + `index/stats`) | top streams by line volume, high-cardinality (high-churn) label warnings, and a retention hint from total ingest bytes |
 | `alert_log_context` | firing alertname (Prometheus) + Loki target | maps the alert's labels → a Loki stream selector (intersect with namespace/job/service/app/container/pod/instance/component, first 4 in priority order; values escaped) and returns the correlated error streams. **Best-effort**: only labels the alert and Loki share will match |
 

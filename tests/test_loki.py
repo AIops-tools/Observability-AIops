@@ -360,3 +360,45 @@ def test_error_streams_window_reports_a_stream_the_line_query_never_reached():
     by_app = {st["labels"]["app"]: st for st in out}
     assert by_app["catalog"]["count"] == 7
     assert by_app["catalog"]["sampleLines"] == []  # honest: counted, never sampled
+
+
+# ── empty baseline: "no errors" vs "no logs at all" ──────────────────────────
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("lines", [None, 0])
+def test_empty_baseline_without_evidence_of_logs_is_not_a_new_signature(lines):
+    # Retention gap, ingestion gap, or a Loki deployed an hour ago all return an
+    # empty baseline. Calling every stream a regression would send the operator
+    # to roll back a deploy that changed nothing.
+    current = [{"labels": {"app": "api"}, "count": 40}]
+    out = la.log_error_burst_rca(current, [], baseline_log_lines=lines)
+    (burst,) = out["bursts"]
+    assert burst["classification"] == la.CLASS_NO_BASELINE
+    assert out["baselineReadable"] is False
+    assert out["baselineLogLines"] == lines
+
+
+@pytest.mark.unit
+def test_empty_baseline_with_logs_present_is_a_genuine_new_signature():
+    current = [{"labels": {"app": "api", "instance": "a"}, "count": 40},
+               {"labels": {"app": "api", "instance": "b"}, "count": 40}]
+    out = la.log_error_burst_rca(current, [], baseline_log_lines=500)
+    assert {b["classification"] for b in out["bursts"]} == {la.CLASS_NEW_SIGNATURE}
+    assert out["baselineReadable"] is True
+
+
+@pytest.mark.unit
+def test_no_baseline_wins_over_single_instance():
+    current = [{"labels": {"app": "web", "instance": "pod-1"}, "count": 20}]
+    out = la.log_error_burst_rca(current, [], baseline_log_lines=0)
+    assert out["bursts"][0]["classification"] == la.CLASS_NO_BASELINE
+
+
+@pytest.mark.unit
+def test_non_empty_baseline_is_readable_without_a_probe():
+    current = [{"labels": {"app": "api"}, "count": 10}]
+    baseline = [{"labels": {"app": "db"}, "count": 3}]
+    out = la.log_error_burst_rca(current, baseline)
+    assert out["baselineReadable"] is True
+    assert out["bursts"][0]["classification"] == la.CLASS_NEW_SIGNATURE

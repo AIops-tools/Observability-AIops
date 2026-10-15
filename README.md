@@ -42,7 +42,7 @@ and guards the writes that follow:
   `alert_noise_and_flap_analysis` (frequently-repeated / duplicate alerts →
   dedup/rollup recommendation), plus two **log** analyses — `log_error_burst_rca`
   (per-stream error burst vs baseline → new-signature / volume-spike /
-  single-instance) and `log_volume_analysis` (top streams + high-cardinality label
+  single-instance / no-baseline) and `log_volume_analysis` (top streams + high-cardinality label
   warnings + retention hint) — and `alert_log_context`, which correlates a firing
   Prometheus alert to its Loki streams.
 - **Governed writes** — create/expire Alertmanager silences (time-boxed), create

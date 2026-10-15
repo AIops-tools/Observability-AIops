@@ -73,7 +73,7 @@ scrape targets and classifies each `lastError`; `alert_noise_and_flap_analysis`
 finds noisy/duplicate alerts and recommends a dedup/rollup. The two **log**
 analyses mirror this: `log_error_burst_rca` compares per-stream error counts
 against a baseline window and classifies each burst (new signature / volume spike
-/ single-instance); `log_volume_analysis` ranks the highest-volume streams and
+/ single-instance / no baseline when the baseline window had no logs at all); `log_volume_analysis` ranks the highest-volume streams and
 warns on high-cardinality (high-churn) labels. `alert_log_context` bridges the two
 signals — it maps a firing Prometheus alert's labels to a Loki stream selector and
 pulls the correlated logs. **Loki is read-only** (no safe write surface).
@@ -204,7 +204,8 @@ monitoring suites (Datadog, New Relic, enterprise NMS) are out of scope.
 2. `observability-aiops logs errors '{app="api"}' --hours 2 --limit 200` → tail
    the error-level lines for that stream
 3. `log_error_burst_rca <selector>` → per-stream error counts against a baseline
-   window, each burst classified (new signature / volume spike / single instance)
+   window, each burst classified (new signature / volume spike / single instance /
+   no baseline)
 4. `observability-aiops logs query '{app="api"} |= "timeout"' --hours 2` → confirm
    the specific signature the RCA named
 5. `log_volume_analysis <selector>` → the highest-volume streams and any

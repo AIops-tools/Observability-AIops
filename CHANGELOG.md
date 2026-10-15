@@ -12,6 +12,15 @@
   level is published in `_meta` under `io.github.AIops-tools/riskLevel`. These
   are hints for the client; audit and undo are unchanged.
 
+### Fixed
+- `log_error_burst_rca`: an empty baseline window was read as "no errors", so a
+  retention or ingestion gap (or a Loki deployed after the window) turned every
+  stream into a **new error signature** with a roll-back recommendation. When
+  the error baseline is empty, the tool now counts total log lines in that
+  window; with no evidence that logs existed, streams are classified
+  `no_baseline` instead. The payload adds `baselineReadable`,
+  `baselineLogLines` and, if the probe fails, `baselineProbeError`.
+
 ## v0.10.4 — 2026-09-17
 
 ### Fixed

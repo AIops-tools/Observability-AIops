@@ -226,6 +226,27 @@ def error_counts_window(conn: Any, logql: str, start_ns: int, end_ns: int) -> li
     return out
 
 
+def log_lines_window(conn: Any, selector: str, start_ns: int, end_ns: int) -> int:
+    """Total log lines (any level) under ``selector`` in a window (may raise).
+
+    Evidence that a window had logs at all. An empty error baseline is ambiguous
+    — "no errors" and "no data" (retention, an ingestion gap, a Loki deployed
+    after the window) both return nothing — and only this count tells them apart.
+    """
+    q = validate_logql(wrap_selector(selector))
+    _validate_window(start_ns, end_ns)
+    seconds = max(1, int((end_ns - start_ns) / _NS_PER_SEC))
+    params = {"query": f"sum(count_over_time({q}[{seconds}s]))", "time": str(end_ns)}
+    data = prom_data(conn.loki_get("/loki/api/v1/query", params))
+    result = data.get("result", []) if isinstance(data, dict) else []
+    total = 0
+    for item in result:
+        value = item.get("value") if isinstance(item, dict) else None
+        if isinstance(value, (list, tuple)) and len(value) >= 2:
+            total += int(num(value[1]))
+    return total
+
+
 def error_streams_window(
     conn: Any, selector: str, start_ns: int, end_ns: int, limit: int = DEFAULT_LINE_LIMIT
 ) -> list[dict]:

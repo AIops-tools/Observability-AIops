@@ -26,6 +26,7 @@ MAX_ROWS = 200
 CLASS_NEW_SIGNATURE = "new_signature"
 CLASS_VOLUME_SPIKE = "volume_spike"
 CLASS_SINGLE_INSTANCE = "single_instance"
+CLASS_NO_BASELINE = "no_baseline"
 
 DEFAULT_BURST_RATIO = 3.0
 DEFAULT_MIN_ERRORS = 1
@@ -46,6 +47,13 @@ _CLASS_GUIDANCE = {
         "Volume spike — an existing error stream's rate jumped sharply vs baseline.",
         "Check upstream/downstream saturation or a retry storm; compare against "
         "request volume before scaling.",
+    ),
+    CLASS_NO_BASELINE: (
+        "No usable baseline — the baseline window has no logs for this selector "
+        "(retention, an ingestion gap, or Loki was not collecting yet), so a new "
+        "signature cannot be told from one that was always there.",
+        "Do not treat this as a regression on this evidence alone. Re-run with a "
+        "shorter window, or compare against deploy history directly.",
     ),
     CLASS_SINGLE_INSTANCE: (
         "Single-instance burst — errors are localized to one instance/pod while its "
@@ -73,6 +81,7 @@ def log_error_burst_rca(
     baseline: list[dict],
     burst_ratio: float = DEFAULT_BURST_RATIO,
     min_errors: int = DEFAULT_MIN_ERRORS,
+    baseline_log_lines: int | None = None,
 ) -> dict:
     """[READ] Classify error bursts per stream against a baseline window.
 
@@ -82,10 +91,16 @@ def log_error_burst_rca(
     (baseline count 0) or its count is >= ``burst_ratio`` x baseline. Each burst
     is classified (new signature / volume spike / single-instance) and annotated
     with a cause + action; sample lines are surfaced (already sanitised upstream).
+
+    An empty ``baseline`` only means "no errors" when the window had logs at
+    all: ``baseline_log_lines`` is that evidence (total lines, any level;
+    ``None`` = not measured). Without it, a stream absent from the baseline is
+    classified ``no_baseline`` instead of a new signature.
     """
     base_by_fp: dict[tuple, int] = {}
     for st in baseline or []:
         base_by_fp[_fingerprint(st.get("labels") or {})] = int(num(st.get("count")))
+    baseline_readable = bool(baseline) or bool(baseline_log_lines)
 
     # Pass 1 — collect burst candidates and the instances bursting per app group.
     candidates: list[dict] = []
@@ -119,7 +134,9 @@ def log_error_burst_rca(
     bursts = []
     for c in candidates:
         instances = bursting_instances.get(c["app"], set())
-        if c["instance"] and len(instances) == 1:
+        if c["is_new"] and not baseline_readable:
+            klass = CLASS_NO_BASELINE
+        elif c["instance"] and len(instances) == 1:
             klass = CLASS_SINGLE_INSTANCE
         elif c["is_new"]:
             klass = CLASS_NEW_SIGNATURE
@@ -146,6 +163,8 @@ def log_error_burst_rca(
         "burstCount": len(bursts),
         "byClassification": by_class,
         "burstRatio": burst_ratio,
+        "baselineReadable": baseline_readable,
+        "baselineLogLines": baseline_log_lines,
         "bursts": bursts[:MAX_ROWS],
         "note": (
             "Advisory read-only heuristic: per-stream error counts compared to a "

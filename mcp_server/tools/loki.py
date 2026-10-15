@@ -10,7 +10,7 @@ correlates them to Loki streams.
 from typing import Optional
 
 from mcp_server._shared import _get_connection, mcp, tool_errors
-from observability_aiops.governance import governed_tool
+from observability_aiops.governance import governed_tool, sanitize
 from observability_aiops.ops import alerts as alerts_ops
 from observability_aiops.ops import log_analysis as log_ops
 from observability_aiops.ops import loki as ops
@@ -108,7 +108,9 @@ def log_error_burst_rca(
     Pulls error streams for the current window (now-hours..now) and an equal-length
     baseline window (now-2*hours..now-hours), then classifies each burst as a new
     error signature, a volume spike, or a single-instance burst — with a cause +
-    action. Advisory heuristic; verify against the raw logs.
+    action. If the baseline window had no logs at all (retention or ingestion gap),
+    streams are classified ``no_baseline`` rather than new: an empty baseline is
+    not evidence of a regression. Advisory heuristic; verify against the raw logs.
 
     Args:
         selector: A Loki stream selector to scope the analysis (e.g. '{app="api"}').
@@ -120,7 +122,17 @@ def log_error_burst_rca(
     span = int(ops._validate_hours(hours) * 3600 * ops._NS_PER_SEC)
     current = ops.error_streams_window(conn, selector, now - span, now)
     baseline = ops.error_streams_window(conn, selector, now - 2 * span, now - span)
-    return log_ops.log_error_burst_rca(current, baseline)
+    lines: Optional[int] = None
+    probe_error: Optional[str] = None
+    if not baseline:
+        # An empty error baseline is only "no errors" if the window had logs at all.
+        try:
+            lines = ops.log_lines_window(conn, selector, now - 2 * span, now - span)
+        except Exception as exc:  # noqa: BLE001 — reported in the payload
+            probe_error = sanitize(f"{type(exc).__name__}: {exc}", 300)
+    result = log_ops.log_error_burst_rca(current, baseline, baseline_log_lines=lines)
+    result["baselineProbeError"] = probe_error  # key always present; null = no failure
+    return result
 
 
 @mcp.tool()
