@@ -58,7 +58,7 @@ def test_label_values_filters_strings():
 
 @pytest.mark.unit
 def test_metrics_tools_are_governed_low():
-    from mcp_server.tools import metrics
+    from observability_aiops.mcp_server.tools import metrics
 
     for fn in (metrics.instant_query, metrics.range_query, metrics.label_values,
                metrics.series_metadata):

@@ -89,7 +89,7 @@ def test_noise_analysis_flags_exact_duplicates():
 
 @pytest.mark.unit
 def test_analysis_tools_are_governed_low_and_run():
-    from mcp_server.tools import analysis
+    from observability_aiops.mcp_server.tools import analysis
 
     for fn in (analysis.firing_alert_rca, analysis.target_scrape_health_analysis,
                analysis.alert_noise_and_flap_analysis):

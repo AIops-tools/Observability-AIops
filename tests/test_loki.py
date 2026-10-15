@@ -245,7 +245,7 @@ def test_connection_loki_get_and_platform_guard():
 
 @pytest.mark.unit
 def test_loki_tools_are_governed_low():
-    from mcp_server.tools import loki as tools
+    from observability_aiops.mcp_server.tools import loki as tools
 
     for fn in (tools.loki_labels, tools.loki_label_values, tools.loki_query,
                tools.loki_tail_errors, tools.log_error_burst_rca,

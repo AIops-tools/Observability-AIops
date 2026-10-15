@@ -54,7 +54,7 @@ def test_list_datasources_and_folders():
 
 @pytest.mark.unit
 def test_grafana_tools_governed_low():
-    from mcp_server.tools import grafana
+    from observability_aiops.mcp_server.tools import grafana
 
     for fn in (grafana.list_dashboards, grafana.get_dashboard, grafana.list_datasources,
                grafana.datasource_health, grafana.list_folders):

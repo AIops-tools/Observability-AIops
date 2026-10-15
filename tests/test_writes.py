@@ -130,8 +130,8 @@ def test_delete_dashboard_undo_cycle_replays_as_recreate(monkeypatch, tmp_path):
     (uid now 404s) succeeds and re-POSTs the exact captured model."""
     import json
 
-    from mcp_server.tools import writes as t
     from observability_aiops.governance import undo as undo_mod
+    from observability_aiops.mcp_server.tools import writes as t
 
     store = undo_mod.UndoStore(tmp_path / "undo.db")
     monkeypatch.setattr(undo_mod, "_store", store)
@@ -179,7 +179,7 @@ def test_reload_records_prior_config_hash():
 
 @pytest.mark.unit
 def test_write_risk_tiers():
-    from mcp_server.tools import writes as t
+    from observability_aiops.mcp_server.tools import writes as t
 
     assert t.create_silence._risk_level == "medium"
     assert t.expire_silence._risk_level == "medium"
@@ -191,7 +191,7 @@ def test_write_risk_tiers():
 
 @pytest.mark.unit
 def test_delete_dashboard_dry_run_does_not_mutate(monkeypatch):
-    from mcp_server.tools import writes as t
+    from observability_aiops.mcp_server.tools import writes as t
 
     conn = _graf_conn({"uid": "abc", "title": "Keep"})
     monkeypatch.setattr(t, "_get_connection", lambda target=None: conn)
@@ -202,7 +202,7 @@ def test_delete_dashboard_dry_run_does_not_mutate(monkeypatch):
 
 @pytest.mark.unit
 def test_silence_undo_descriptor_inverts_to_expire():
-    from mcp_server.tools import writes as t
+    from observability_aiops.mcp_server.tools import writes as t
 
     descriptor = t._silence_undo({}, {"silenceId": "sil-9"})
     assert descriptor["tool"] == "expire_silence"
@@ -211,7 +211,7 @@ def test_silence_undo_descriptor_inverts_to_expire():
 
 @pytest.mark.unit
 def test_update_dashboard_undo_descriptor_restores_prior():
-    from mcp_server.tools import writes as t
+    from observability_aiops.mcp_server.tools import writes as t
 
     prior = {"uid": "abc", "title": "Old"}
     descriptor = t._update_dashboard_undo({}, {"priorState": {"dashboard": prior}})
@@ -224,8 +224,8 @@ def test_update_dashboard_undo_descriptor_restores_prior():
 
 @pytest.mark.unit
 def test_governed_update_dashboard_records_undo(monkeypatch, tmp_path):
-    from mcp_server.tools import writes as t
     from observability_aiops.governance import undo as undo_mod
+    from observability_aiops.mcp_server.tools import writes as t
 
     # Isolate the undo store to a throwaway db.
     store = undo_mod.UndoStore(tmp_path / "undo.db")

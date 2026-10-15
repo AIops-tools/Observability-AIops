@@ -2,8 +2,8 @@
 
 from typing import Optional
 
-from mcp_server._shared import _get_connection, mcp, tool_errors
 from observability_aiops.governance import governed_tool
+from observability_aiops.mcp_server._shared import _get_connection, mcp, tool_errors
 from observability_aiops.ops import alerts as alerts_ops
 from observability_aiops.ops import analysis as ops
 from observability_aiops.ops import rules as rules_ops

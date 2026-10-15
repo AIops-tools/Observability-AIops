@@ -76,7 +76,7 @@ def test_list_silences_counts_active():
 
 @pytest.mark.unit
 def test_alert_tools_governed_low():
-    from mcp_server.tools import alerts
+    from observability_aiops.mcp_server.tools import alerts
 
     for fn in (alerts.firing_alerts, alerts.pending_alerts, alerts.alertmanager_alerts,
                alerts.list_silences):

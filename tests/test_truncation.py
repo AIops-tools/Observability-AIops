@@ -162,7 +162,7 @@ def test_series_metadata_announces_truncation():
 
 @pytest.mark.unit
 def test_undo_list_measures_truncation(monkeypatch):
-    from mcp_server.tools import undo as undo_tools
+    from observability_aiops.mcp_server.tools import undo as undo_tools
 
     rows = [{"undo_id": f"u{i}", "ts": i, "tool": "create_silence",
              "undo_tool": "expire_silence", "note": ""} for i in range(4)]

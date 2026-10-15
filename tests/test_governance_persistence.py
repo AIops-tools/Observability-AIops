@@ -132,7 +132,7 @@ def test_real_write_tool_persists_priorstate_undo(gov_home, monkeypatch):
     conn.graf_get.return_value = {"dashboard": prior, "meta": {}}
     conn.graf_delete.return_value = {"message": "deleted"}
 
-    from mcp_server.tools import writes as gov
+    from observability_aiops.mcp_server.tools import writes as gov
 
     monkeypatch.setattr(gov, "_get_connection", lambda target=None: conn)
     result = gov.delete_dashboard(uid="abc")

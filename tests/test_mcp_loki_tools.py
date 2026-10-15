@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mcp_server.tools import loki as t
+from observability_aiops.mcp_server.tools import loki as t
 
 
 def _loki_conn(query_payload):

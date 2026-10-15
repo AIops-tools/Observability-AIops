@@ -13,8 +13,8 @@ tier into the audit row. Every write supports ``dry_run``.
 
 from typing import Any, Optional
 
-from mcp_server._shared import _get_connection, mcp, tool_errors
 from observability_aiops.governance import governed_tool
+from observability_aiops.mcp_server._shared import _get_connection, mcp, tool_errors
 from observability_aiops.ops import grafana as grafana_ops
 from observability_aiops.ops import prom_status
 from observability_aiops.ops import writes as ops

@@ -28,7 +28,8 @@ import typer
 from observability_aiops.cli._common import checked
 
 CLI_DIR = pathlib.Path(__file__).resolve().parents[1] / "observability_aiops" / "cli"
-TOOLS_DIR = pathlib.Path(__file__).resolve().parents[1] / "mcp_server" / "tools"
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+TOOLS_DIR = REPO_ROOT / "observability_aiops" / "mcp_server" / "tools"
 
 #: Helpers that end the command non-zero when the payload reports a failure.
 CHECKERS = ['checked', 'dry_run_preview']

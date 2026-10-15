@@ -9,8 +9,8 @@ correlates them to Loki streams.
 
 from typing import Optional
 
-from mcp_server._shared import _get_connection, mcp, tool_errors
 from observability_aiops.governance import governed_tool, sanitize
+from observability_aiops.mcp_server._shared import _get_connection, mcp, tool_errors
 from observability_aiops.ops import alerts as alerts_ops
 from observability_aiops.ops import log_analysis as log_ops
 from observability_aiops.ops import loki as ops

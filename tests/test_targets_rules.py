@@ -81,7 +81,7 @@ def test_rule_health_flags_erroring():
 
 @pytest.mark.unit
 def test_target_and_rule_tools_governed_low():
-    from mcp_server.tools import prometheus, rules, targets
+    from observability_aiops.mcp_server.tools import prometheus, rules, targets
 
     for fn in (targets.list_targets, targets.target_scrape_health, targets.dropped_targets,
                rules.list_rules, rules.rule_health, prometheus.prometheus_config_status,
